@@ -1,0 +1,11 @@
+name: streamlit-sortable-multiselect
+version: 1.0.0
+description: APM project for streamlit-sortable-multiselect
+author: Developer
+dependencies:
+  apm:
+  - github/awesome-copilot/plugins/context-engineering
+  - github/awesome-copilot/skills/documentation-writer
+  mcp: []
+includes: auto
+scripts: {}
