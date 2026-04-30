@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "streamlit-sortable-multiselect"
+version = "0.1.0"
+description = "A Streamlit custom component for selecting and reordering multiple string values."
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+  { name = "Developer" },
+]
+license = "MIT"
+keywords = ["streamlit", "component", "multiselect", "sortable", "drag-and-drop"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Framework :: Streamlit",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+  "streamlit>=1.30",
+]
+
+[project.urls]
+Homepage = "https://github.com/KentaroAOKI/streamlit-sortable-multiselect"
+Repository = "https://github.com/KentaroAOKI/streamlit-sortable-multiselect"
+Issues = "https://github.com/KentaroAOKI/streamlit-sortable-multiselect/issues"
+
+[project.optional-dependencies]
+dev = [
+  "build>=1.2",
+  "pytest>=8",
+  "twine>=6",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["streamlit_sortable_multiselect*"]
+
+[tool.setuptools.package-data]
+streamlit_sortable_multiselect = [
+  "frontend/build/**/*",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

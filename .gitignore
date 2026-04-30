@@ -1,3 +1,13 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.codex
 
-# APM dependencies
+node_modules/
+.vite/
+dist/
 apm_modules/
+
+.DS_Store

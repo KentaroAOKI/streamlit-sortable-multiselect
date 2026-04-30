@@ -1,0 +1,9 @@
+include README.md
+include LICENSE
+recursive-include streamlit_sortable_multiselect/frontend/build *
+prune streamlit_sortable_multiselect/frontend/node_modules
+prune streamlit_sortable_multiselect/frontend/src
+exclude streamlit_sortable_multiselect/frontend/package-lock.json
+exclude streamlit_sortable_multiselect/frontend/package.json
+exclude streamlit_sortable_multiselect/frontend/tsconfig.json
+exclude streamlit_sortable_multiselect/frontend/vite.config.ts
