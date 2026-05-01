@@ -1,4 +1,4 @@
-import { KeyboardEvent, useEffect, useMemo, useState } from "react";
+import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   Streamlit,
   withStreamlitConnection,
@@ -29,6 +29,10 @@ type Args = {
   default_selected?: string[];
   placeholder?: string;
   disabled?: boolean;
+  show_move_buttons?: boolean;
+  show_numbers?: boolean;
+  base_color?: string | null;
+  order_colors?: Record<string, string>;
 };
 
 type SortableItemProps = {
@@ -36,8 +40,19 @@ type SortableItemProps = {
   index: number;
   count: number;
   disabled: boolean;
+  showMoveButtons: boolean;
+  showNumber: boolean;
+  itemColor?: string;
   onRemove: (value: string) => void;
   onMove: (fromIndex: number, toIndex: number) => void;
+};
+
+type ItemStyle = {
+  transform: string | undefined;
+  transition: string | undefined;
+  "--item-bg"?: string;
+  "--item-fg"?: string;
+  "--item-muted-fg"?: string;
 };
 
 function normalizeSelection(values: string[] | undefined, options: string[]): string[] {
@@ -55,11 +70,37 @@ function normalizeSelection(values: string[] | undefined, options: string[]): st
   });
 }
 
+function getReadableTextColor(color: string | undefined): string | undefined {
+  if (!color || typeof document === "undefined") {
+    return undefined;
+  }
+
+  const probe = document.createElement("span");
+  probe.style.color = color;
+  document.body.appendChild(probe);
+  const computedColor = window.getComputedStyle(probe).color;
+  document.body.removeChild(probe);
+
+  const match = computedColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  if (!match) {
+    return undefined;
+  }
+
+  const red = Number(match[1]);
+  const green = Number(match[2]);
+  const blue = Number(match[3]);
+  const luminance = (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255;
+  return luminance > 0.58 ? "#111827" : "#ffffff";
+}
+
 function SortableItem({
   id,
   index,
   count,
   disabled,
+  showMoveButtons,
+  showNumber,
+  itemColor,
   onRemove,
   onMove,
 }: SortableItemProps) {
@@ -72,15 +113,25 @@ function SortableItem({
     isDragging,
   } = useSortable({ id, disabled });
 
-  const style = {
+  const style: ItemStyle = {
     transform: CSS.Transform.toString(transform),
     transition,
   };
+  const textColor = getReadableTextColor(itemColor);
+  if (itemColor) {
+    style["--item-bg"] = itemColor;
+  }
+  if (textColor) {
+    style["--item-fg"] = textColor;
+    style["--item-muted-fg"] = textColor;
+  }
 
   return (
     <li
       ref={setNodeRef}
-      className={`sortable-item${isDragging ? " dragging" : ""}`}
+      className={`sortable-item${isDragging ? " dragging" : ""}${
+        showNumber ? " with-number" : ""
+      }`}
       style={style}
     >
       <button
@@ -93,24 +144,29 @@ function SortableItem({
       >
         <span aria-hidden="true">⋮⋮</span>
       </button>
+      {showNumber ? <span className="item-number">{index + 1}</span> : null}
       <span className="item-label">{id}</span>
       <div className="item-actions">
-        <button
-          type="button"
-          aria-label={`Move ${id} up`}
-          disabled={disabled || index === 0}
-          onClick={() => onMove(index, index - 1)}
-        >
-          ↑
-        </button>
-        <button
-          type="button"
-          aria-label={`Move ${id} down`}
-          disabled={disabled || index === count - 1}
-          onClick={() => onMove(index, index + 1)}
-        >
-          ↓
-        </button>
+        {showMoveButtons ? (
+          <>
+            <button
+              type="button"
+              aria-label={`Move ${id} up`}
+              disabled={disabled || index === 0}
+              onClick={() => onMove(index, index - 1)}
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              aria-label={`Move ${id} down`}
+              disabled={disabled || index === count - 1}
+              onClick={() => onMove(index, index + 1)}
+            >
+              ↓
+            </button>
+          </>
+        ) : null}
         <button
           type="button"
           aria-label={`Remove ${id}`}
@@ -130,6 +186,10 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
   const options = Array.isArray(componentArgs.options) ? componentArgs.options : [];
   const placeholder = componentArgs.placeholder ?? "Select...";
   const disabled = Boolean(componentArgs.disabled || streamlitDisabled);
+  const showMoveButtons = componentArgs.show_move_buttons ?? true;
+  const showNumbers = componentArgs.show_numbers ?? false;
+  const baseColor = componentArgs.base_color ?? undefined;
+  const orderColors = componentArgs.order_colors ?? {};
   const defaultSelection = useMemo(
     () => normalizeSelection(componentArgs.default_selected, options),
     [componentArgs.default_selected, options],
@@ -138,6 +198,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -147,13 +208,9 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
 
   useEffect(() => {
     setSelected((current) => {
-      const normalizedCurrent = normalizeSelection(current, options);
-      if (normalizedCurrent.length > 0 || defaultSelection.length === 0) {
-        return normalizedCurrent;
-      }
-      return defaultSelection;
+      return normalizeSelection(current, options);
     });
-  }, [defaultSelection, options]);
+  }, [options]);
 
   useEffect(() => {
     Streamlit.setComponentValue(selected);
@@ -188,7 +245,10 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
     }
     setSelected((current) => [...current, value]);
     setQuery("");
-    setIsOpen(false);
+    setIsOpen(selected.length + 1 < options.length);
+    window.setTimeout(() => {
+      searchInputRef.current?.focus();
+    }, 0);
   }
 
   function removeValue(value: string) {
@@ -260,6 +320,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
       {label ? <label className="component-label">{label}</label> : null}
       <div className="search-combobox">
         <input
+          ref={searchInputRef}
           className="search-input"
           type="text"
           role="combobox"
@@ -323,6 +384,9 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
                   index={index}
                   count={selected.length}
                   disabled={disabled}
+                  showMoveButtons={showMoveButtons}
+                  showNumber={showNumbers}
+                  itemColor={orderColors[String(index + 1)] ?? baseColor}
                   onRemove={removeValue}
                   onMove={moveValue}
                 />

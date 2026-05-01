@@ -103,15 +103,20 @@ input {
 
 .sortable-item {
   align-items: center;
-  background: #ffffff;
+  background: var(--item-bg, #ffffff);
   border: 1px solid #d1d5db;
   border-radius: 6px;
   box-sizing: border-box;
+  color: var(--item-fg, #111827);
   display: grid;
   gap: 8px;
   grid-template-columns: 34px minmax(0, 1fr) auto;
   min-height: 40px;
   padding: 4px;
+}
+
+.sortable-item.with-number {
+  grid-template-columns: 34px 30px minmax(0, 1fr) auto;
 }
 
 .sortable-item.dragging {
@@ -125,7 +130,7 @@ input {
   background: transparent;
   border: 1px solid transparent;
   border-radius: 4px;
-  color: #374151;
+  color: var(--item-muted-fg, #374151);
   cursor: pointer;
   display: inline-flex;
   height: 30px;
@@ -147,13 +152,28 @@ input {
 
 .drag-handle:disabled,
 .item-actions button:disabled {
-  color: #9ca3af;
+  color: color-mix(in srgb, var(--item-muted-fg, #374151) 45%, transparent);
   cursor: not-allowed;
 }
 
 .item-label {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.item-number {
+  align-items: center;
+  background: color-mix(in srgb, var(--item-bg, #f3f4f6) 72%, #ffffff);
+  border-radius: 999px;
+  color: var(--item-fg, #4b5563);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 600;
+  height: 24px;
+  justify-content: center;
+  line-height: 1;
+  min-width: 24px;
+  padding: 0 6px;
 }
 
 .item-actions {

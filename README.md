@@ -33,6 +33,10 @@ selected = sortable_multiselect(
     options=["Streamlit", "FastAPI", "Django", "Flask"],
     default=["Streamlit"],
     placeholder="Search frameworks...",
+    show_move_buttons=True,
+    show_numbers=True,
+    base_color="#eef2ff",
+    order_colors={1: "#fee2e2", 2: "#dcfce7"},
 )
 
 st.write(selected)
