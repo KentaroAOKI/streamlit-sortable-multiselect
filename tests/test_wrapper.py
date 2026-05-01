@@ -26,7 +26,11 @@ def test_returns_default_when_component_has_no_value(monkeypatch):
     )
 
     assert result == ["b", "a"]
-    assert calls[0]["options"] == ["a", "b", "c"]
+    assert calls[0]["options"] == [
+        {"label": "a", "value": "a", "icon_url": None},
+        {"label": "b", "value": "b", "icon_url": None},
+        {"label": "c", "value": "c", "icon_url": None},
+    ]
     assert calls[0]["default_selected"] == ["b", "a"]
     assert calls[0]["default"] == ["b", "a"]
     assert calls[0]["show_move_buttons"] is False
@@ -44,12 +48,40 @@ def test_returns_component_value(monkeypatch):
     assert result == ["c", "a"]
 
 
+def test_accepts_label_value_icon_options(monkeypatch):
+    calls = []
+
+    def fake_component(**kwargs):
+        calls.append(kwargs)
+        return None
+
+    monkeypatch.setattr(sms, "_component_func", fake_component)
+
+    result = sms.sortable_multiselect(
+        "Items",
+        options=[
+            {"label": "Python", "value": "python", "icon_url": "https://example.com/python.png"},
+            {"label": "TypeScript", "value": "typescript"},
+        ],
+        default=["python"],
+    )
+
+    assert result == ["python"]
+    assert calls[0]["options"] == [
+        {"label": "Python", "value": "python", "icon_url": "https://example.com/python.png"},
+        {"label": "TypeScript", "value": "typescript", "icon_url": None},
+    ]
+
+
 @pytest.mark.parametrize(
     ("kwargs", "error"),
     [
         ({"label": 123, "options": ["a"]}, TypeError),
         ({"label": "Items", "options": "a"}, TypeError),
         ({"label": "Items", "options": ["a", 1]}, TypeError),
+        ({"label": "Items", "options": [{"value": "a"}]}, TypeError),
+        ({"label": "Items", "options": [{"label": "A"}]}, TypeError),
+        ({"label": "Items", "options": [{"label": "A", "value": "a", "icon_url": 1}]}, TypeError),
         ({"label": "Items", "options": ["a"], "default": "a"}, TypeError),
         ({"label": "Items", "options": ["a"], "placeholder": 1}, TypeError),
         ({"label": "Items", "options": ["a"], "disabled": "no"}, TypeError),

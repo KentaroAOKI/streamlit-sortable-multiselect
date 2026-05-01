@@ -23,9 +23,15 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import "./style.css";
 
+type OptionItem = {
+  label: string;
+  value: string;
+  icon_url?: string | null;
+};
+
 type Args = {
   label?: string;
-  options?: string[];
+  options?: Array<string | OptionItem>;
   default_selected?: string[];
   placeholder?: string;
   disabled?: boolean;
@@ -37,6 +43,8 @@ type Args = {
 
 type SortableItemProps = {
   id: string;
+  label: string;
+  iconUrl?: string | null;
   index: number;
   count: number;
   disabled: boolean;
@@ -55,14 +63,40 @@ type ItemStyle = {
   "--item-muted-fg"?: string;
 };
 
-function normalizeSelection(values: string[] | undefined, options: string[]): string[] {
+function normalizeOptions(options: Array<string | OptionItem> | undefined): OptionItem[] {
+  if (!Array.isArray(options)) {
+    return [];
+  }
+
+  return options.flatMap((option) => {
+    if (typeof option === "string") {
+      return [{ label: option, value: option, icon_url: null }];
+    }
+
+    if (
+      option &&
+      typeof option.label === "string" &&
+      typeof option.value === "string" &&
+      (option.icon_url === undefined ||
+        option.icon_url === null ||
+        typeof option.icon_url === "string")
+    ) {
+      return [{ label: option.label, value: option.value, icon_url: option.icon_url ?? null }];
+    }
+
+    return [];
+  });
+}
+
+function normalizeSelection(values: string[] | undefined, options: OptionItem[]): string[] {
   if (!Array.isArray(values)) {
     return [];
   }
 
+  const optionValues = new Set(options.map((option) => option.value));
   const seen = new Set<string>();
   return values.filter((value) => {
-    if (!options.includes(value) || seen.has(value)) {
+    if (!optionValues.has(value) || seen.has(value)) {
       return false;
     }
     seen.add(value);
@@ -95,6 +129,8 @@ function getReadableTextColor(color: string | undefined): string | undefined {
 
 function SortableItem({
   id,
+  label,
+  iconUrl,
   index,
   count,
   disabled,
@@ -145,13 +181,16 @@ function SortableItem({
         <span aria-hidden="true">⋮⋮</span>
       </button>
       {showNumber ? <span className="item-number">{index + 1}</span> : null}
-      <span className="item-label">{id}</span>
+      <span className="item-content">
+        {iconUrl ? <img className="item-icon" src={iconUrl} alt="" aria-hidden="true" /> : null}
+        <span className="item-label">{label}</span>
+      </span>
       <div className="item-actions">
         {showMoveButtons ? (
           <>
             <button
               type="button"
-              aria-label={`Move ${id} up`}
+              aria-label={`Move ${label} up`}
               disabled={disabled || index === 0}
               onClick={() => onMove(index, index - 1)}
             >
@@ -159,7 +198,7 @@ function SortableItem({
             </button>
             <button
               type="button"
-              aria-label={`Move ${id} down`}
+              aria-label={`Move ${label} down`}
               disabled={disabled || index === count - 1}
               onClick={() => onMove(index, index + 1)}
             >
@@ -169,7 +208,7 @@ function SortableItem({
         ) : null}
         <button
           type="button"
-          aria-label={`Remove ${id}`}
+          aria-label={`Remove ${label}`}
           disabled={disabled}
           onClick={() => onRemove(id)}
         >
@@ -183,7 +222,11 @@ function SortableItem({
 export function SortableMultiselect({ args, disabled: streamlitDisabled }: ComponentProps) {
   const componentArgs = args as Args;
   const label = componentArgs.label ?? "";
-  const options = Array.isArray(componentArgs.options) ? componentArgs.options : [];
+  const options = useMemo(() => normalizeOptions(componentArgs.options), [componentArgs.options]);
+  const optionByValue = useMemo(
+    () => new Map(options.map((option) => [option.value, option])),
+    [options],
+  );
   const placeholder = componentArgs.placeholder ?? "Select...";
   const disabled = Boolean(componentArgs.disabled || streamlitDisabled);
   const showMoveButtons = componentArgs.show_move_buttons ?? true;
@@ -221,10 +264,10 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
     Streamlit.setFrameHeight();
   });
 
-  const availableOptions = options.filter((option) => !selected.includes(option));
+  const availableOptions = options.filter((option) => !selected.includes(option.value));
   const normalizedQuery = query.trim().toLowerCase();
   const filteredOptions = availableOptions.filter((option) =>
-    option.toLowerCase().includes(normalizedQuery),
+    option.label.toLowerCase().includes(normalizedQuery),
   );
   const hasOptions = availableOptions.length > 0;
   const activeOption = filteredOptions[highlightedIndex] ?? filteredOptions[0];
@@ -240,7 +283,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
   }, [filteredOptions.length, highlightedIndex]);
 
   function addValue(value: string) {
-    if (!value || disabled || selected.includes(value) || !options.includes(value)) {
+    if (!value || disabled || selected.includes(value) || !optionByValue.has(value)) {
       return;
     }
     setSelected((current) => [...current, value]);
@@ -305,7 +348,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
     if (event.key === "Enter") {
       event.preventDefault();
       if (activeOption) {
-        addValue(activeOption);
+        addValue(activeOption.value);
       }
       return;
     }
@@ -356,14 +399,17 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
                 <li
                   id={`sortable-multiselect-option-${index}`}
                   className={`option-item${index === highlightedIndex ? " highlighted" : ""}`}
-                  key={option}
+                  key={option.value}
                   role="option"
                   aria-selected={index === highlightedIndex}
                   onMouseDown={(event) => event.preventDefault()}
                   onMouseEnter={() => setHighlightedIndex(index)}
-                  onClick={() => addValue(option)}
+                  onClick={() => addValue(option.value)}
                 >
-                  {option}
+                  {option.icon_url ? (
+                    <img className="option-icon" src={option.icon_url} alt="" aria-hidden="true" />
+                  ) : null}
+                  <span>{option.label}</span>
                 </li>
               ))
             )}
@@ -377,10 +423,14 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={selected} strategy={verticalListSortingStrategy}>
             <ul className="selected-list" aria-label="Selected items">
-              {selected.map((item, index) => (
+              {selected.map((item, index) => {
+                const option = optionByValue.get(item) ?? { label: item, value: item, icon_url: null };
+                return (
                 <SortableItem
                   key={item}
                   id={item}
+                  label={option.label}
+                  iconUrl={option.icon_url}
                   index={index}
                   count={selected.length}
                   disabled={disabled}
@@ -390,7 +440,8 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
                   onRemove={removeValue}
                   onMove={moveValue}
                 />
-              ))}
+                );
+              })}
             </ul>
           </SortableContext>
         </DndContext>

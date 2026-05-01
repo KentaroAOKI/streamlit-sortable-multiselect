@@ -86,6 +86,30 @@ describe("SortableMultiselect", () => {
     expect(screen.queryByRole("option", { name: "Beta" })).not.toBeInTheDocument();
   });
 
+  it("supports label value options and returns selected values", async () => {
+    renderComponent({
+      options: [
+        { label: "Python", value: "python", icon_url: "https://example.com/python.png" },
+        { label: "TypeScript", value: "typescript", icon_url: "https://example.com/ts.png" },
+      ],
+      default_selected: ["python"],
+    });
+
+    const selectedPython = screen.getByText("Python");
+    expect(selectedPython).toBeInTheDocument();
+    expect(selectedPython.parentElement?.querySelector("img")).toHaveAttribute(
+      "src",
+      "https://example.com/python.png",
+    );
+
+    fireEvent.focus(screen.getByLabelText("Search and add item to Items"));
+    fireEvent.click(screen.getByRole("option", { name: "TypeScript" }));
+
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["python", "typescript"]);
+    });
+  });
+
   it("adds the highlighted option with enter", async () => {
     renderComponent();
 

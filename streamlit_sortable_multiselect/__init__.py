@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Iterable, Mapping, Sequence, cast
+from typing import Any, Iterable, Mapping, Sequence, cast
 
 import streamlit.components.v1 as components
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 __all__ = ["sortable_multiselect"]
 
 _COMPONENT_NAME = "streamlit_sortable_multiselect"
@@ -39,6 +39,34 @@ def _validate_string_sequence(name: str, values: Sequence[str] | None) -> list[s
     return result
 
 
+def _normalize_options(options: Sequence[str | Mapping[str, Any]]) -> list[dict[str, str | None]]:
+    if isinstance(options, str) or not isinstance(options, Iterable):
+        raise TypeError("options must be a sequence of strings or option dictionaries.")
+
+    normalized_options: list[dict[str, str | None]] = []
+    for option in options:
+        if isinstance(option, str):
+            normalized_options.append({"label": option, "value": option, "icon_url": None})
+            continue
+
+        if not isinstance(option, Mapping):
+            raise TypeError("options must contain only strings or option dictionaries.")
+
+        label = option.get("label")
+        value = option.get("value")
+        icon_url = option.get("icon_url")
+        if not isinstance(label, str):
+            raise TypeError("option dictionaries must contain a string label.")
+        if not isinstance(value, str):
+            raise TypeError("option dictionaries must contain a string value.")
+        if icon_url is not None and not isinstance(icon_url, str):
+            raise TypeError("option icon_url must be a string or None.")
+
+        normalized_options.append({"label": label, "value": value, "icon_url": icon_url})
+
+    return normalized_options
+
+
 def _validate_order_colors(order_colors: Mapping[int, str] | None) -> dict[int, str]:
     if order_colors is None:
         return {}
@@ -59,7 +87,7 @@ def _validate_order_colors(order_colors: Mapping[int, str] | None) -> dict[int, 
 
 def sortable_multiselect(
     label: str,
-    options: Sequence[str],
+    options: Sequence[str | Mapping[str, Any]],
     default: Sequence[str] | None = None,
     placeholder: str = "Select...",
     disabled: bool = False,
@@ -76,7 +104,7 @@ def sortable_multiselect(
     label:
         Text label rendered above the component.
     options:
-        Available string values.
+        Available string values, or dictionaries with label, value, and optional icon_url.
     default:
         Initially selected values, in the desired initial order.
     placeholder:
@@ -107,7 +135,8 @@ def sortable_multiselect(
     if base_color is not None and not isinstance(base_color, str):
         raise TypeError("base_color must be a string or None.")
 
-    option_values = _validate_string_sequence("options", options)
+    option_items = _normalize_options(options)
+    option_values = [option["value"] for option in option_items]
     default_values = _validate_string_sequence("default", default)
     order_color_values = _validate_order_colors(order_colors)
 
@@ -126,7 +155,7 @@ def sortable_multiselect(
 
     component_value = _component_func(
         label=label,
-        options=option_values,
+        options=option_items,
         default_selected=default_values,
         placeholder=placeholder,
         disabled=disabled,
