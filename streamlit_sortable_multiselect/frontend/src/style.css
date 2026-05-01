@@ -72,9 +72,12 @@ input {
 
 .option-item,
 .option-empty {
+  align-items: center;
   border-radius: 4px;
   box-sizing: border-box;
   color: #111827;
+  display: flex;
+  gap: 8px;
   min-height: 32px;
   padding: 7px 9px;
 }
@@ -156,9 +159,25 @@ input {
   cursor: not-allowed;
 }
 
+.item-content {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  min-width: 0;
+}
+
 .item-label {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.item-icon,
+.option-icon {
+  border-radius: 4px;
+  flex: 0 0 auto;
+  height: 20px;
+  object-fit: contain;
+  width: 20px;
 }
 
 .item-number {

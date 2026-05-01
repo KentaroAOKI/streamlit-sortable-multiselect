@@ -30,8 +30,13 @@ from streamlit_sortable_multiselect import sortable_multiselect
 
 selected = sortable_multiselect(
     "Favorite frameworks",
-    options=["Streamlit", "FastAPI", "Django", "Flask"],
-    default=["Streamlit"],
+    options=[
+        {"label": "Streamlit", "value": "streamlit", "icon_url": "https://streamlit.io/images/brand/streamlit-mark-color.png"},
+        {"label": "FastAPI", "value": "fastapi", "icon_url": "https://fastapi.tiangolo.com/img/favicon.png"},
+        {"label": "Django", "value": "django"},
+        {"label": "Flask", "value": "flask"},
+    ],
+    default=["streamlit"],
     placeholder="Search frameworks...",
     show_move_buttons=True,
     show_numbers=True,
