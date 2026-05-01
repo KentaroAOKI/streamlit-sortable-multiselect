@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "streamlit-sortable-multiselect"
-version = "0.1.1"
+version = "0.4.0"
 description = "A Streamlit custom component for selecting and reordering multiple string values."
 readme = "README.md"
 requires-python = ">=3.9"

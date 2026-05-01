@@ -45,13 +45,97 @@ describe("SortableMultiselect", () => {
 
     expect(screen.getByText("Beta")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Add item to Items"), {
-      target: { value: "Alpha" },
-    });
+    fireEvent.focus(screen.getByLabelText("Search and add item to Items"));
+    fireEvent.click(screen.getByRole("option", { name: "Alpha" }));
 
     await waitFor(() => {
       expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["Beta", "Alpha"]);
     });
+  });
+
+  it("keeps options open after adding an item so another item can be selected", async () => {
+    renderComponent();
+
+    const input = screen.getByLabelText("Search and add item to Items");
+    fireEvent.focus(input);
+    fireEvent.click(screen.getByRole("option", { name: "Alpha" }));
+
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["Beta", "Alpha"]);
+    });
+
+    expect(input).toHaveFocus();
+    expect(screen.getByRole("option", { name: "Gamma" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("option", { name: "Gamma" }));
+
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["Beta", "Alpha", "Gamma"]);
+    });
+  });
+
+  it("filters options case-insensitively while typing", () => {
+    renderComponent();
+
+    fireEvent.change(screen.getByLabelText("Search and add item to Items"), {
+      target: { value: "ga" },
+    });
+
+    expect(screen.getByRole("option", { name: "Gamma" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Alpha" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Beta" })).not.toBeInTheDocument();
+  });
+
+  it("adds the highlighted option with enter", async () => {
+    renderComponent();
+
+    const input = screen.getByLabelText("Search and add item to Items");
+    fireEvent.change(input, { target: { value: "alp" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["Beta", "Alpha"]);
+    });
+  });
+
+  it("moves highlighted option with arrow keys", async () => {
+    renderComponent({ default_selected: [] });
+
+    const input = screen.getByLabelText("Search and add item to Items");
+    fireEvent.focus(input);
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["Beta"]);
+    });
+  });
+
+  it("closes options with escape", () => {
+    renderComponent();
+
+    const input = screen.getByLabelText("Search and add item to Items");
+    fireEvent.focus(input);
+    expect(screen.getByRole("listbox", { name: "Available options" })).toBeInTheDocument();
+
+    fireEvent.keyDown(input, { key: "Escape" });
+
+    expect(screen.queryByRole("listbox", { name: "Available options" })).not.toBeInTheDocument();
+  });
+
+  it("does not show already selected options as search results", () => {
+    renderComponent();
+
+    fireEvent.focus(screen.getByLabelText("Search and add item to Items"));
+
+    expect(screen.queryByRole("option", { name: "Beta" })).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Alpha" })).toBeInTheDocument();
+  });
+
+  it("disables search input when disabled", () => {
+    renderComponent({ disabled: true });
+
+    expect(screen.getByLabelText("Search and add item to Items")).toBeDisabled();
   });
 
   it("moves selected items with buttons", async () => {
@@ -64,6 +148,96 @@ describe("SortableMultiselect", () => {
     });
   });
 
+  it("shows move buttons by default", () => {
+    renderComponent({ default_selected: ["Alpha", "Beta"] });
+
+    expect(screen.getByLabelText("Move Alpha down")).toBeInTheDocument();
+    expect(screen.getByLabelText("Move Beta up")).toBeInTheDocument();
+  });
+
+  it("hides move buttons when configured", () => {
+    renderComponent({
+      default_selected: ["Alpha", "Beta"],
+      show_move_buttons: false,
+    });
+
+    expect(screen.queryByLabelText("Move Alpha down")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Move Beta up")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Remove Alpha")).toBeInTheDocument();
+  });
+
+  it("shows 1-based numbers for selected items when configured", () => {
+    renderComponent({
+      default_selected: ["Alpha", "Beta"],
+      show_numbers: true,
+    });
+
+    expect(screen.getByText("1")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+  });
+
+  it("keeps numbers aligned with the current order after moving", async () => {
+    renderComponent({
+      default_selected: ["Alpha", "Beta"],
+      show_numbers: true,
+    });
+
+    fireEvent.click(screen.getByLabelText("Move Alpha down"));
+
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["Beta", "Alpha"]);
+    });
+
+    const rows = screen.getAllByRole("listitem");
+    expect(rows[0]).toHaveTextContent("1");
+    expect(rows[0]).toHaveTextContent("Beta");
+    expect(rows[1]).toHaveTextContent("2");
+    expect(rows[1]).toHaveTextContent("Alpha");
+  });
+
+  it("applies a base color to selected items", () => {
+    renderComponent({
+      default_selected: ["Alpha", "Beta"],
+      base_color: "#eef2ff",
+    });
+
+    const rows = screen.getAllByRole("listitem");
+    expect(rows[0]).toHaveStyle({ "--item-bg": "#eef2ff" });
+    expect(rows[1]).toHaveStyle({ "--item-bg": "#eef2ff" });
+  });
+
+  it("applies order colors before the base color", () => {
+    renderComponent({
+      default_selected: ["Alpha", "Beta"],
+      base_color: "#eef2ff",
+      order_colors: { "2": "#fee2e2" },
+    });
+
+    const rows = screen.getAllByRole("listitem");
+    expect(rows[0]).toHaveStyle({ "--item-bg": "#eef2ff" });
+    expect(rows[1]).toHaveStyle({ "--item-bg": "#fee2e2" });
+  });
+
+  it("keeps order colors tied to the current order after moving", async () => {
+    renderComponent({
+      default_selected: ["Alpha", "Beta"],
+      base_color: "#eef2ff",
+      order_colors: { "1": "#fee2e2", "2": "#dcfce7" },
+    });
+
+    fireEvent.click(screen.getByLabelText("Move Alpha down"));
+
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["Beta", "Alpha"]);
+    });
+
+    const rows = screen.getAllByRole("listitem");
+    expect(rows[0]).toHaveTextContent("Beta");
+    expect(rows[0]).toHaveStyle({ "--item-bg": "#fee2e2" });
+    expect(rows[1]).toHaveTextContent("Alpha");
+    expect(rows[1]).toHaveStyle({ "--item-bg": "#dcfce7" });
+  });
+
   it("removes selected items", async () => {
     renderComponent({ default_selected: ["Alpha", "Beta"] });
 
@@ -72,5 +246,18 @@ describe("SortableMultiselect", () => {
     await waitFor(() => {
       expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["Beta"]);
     });
+  });
+
+  it("allows removing all selected items without restoring defaults", async () => {
+    renderComponent({ default_selected: ["Alpha"] });
+
+    fireEvent.click(screen.getByLabelText("Remove Alpha"));
+
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith([]);
+    });
+
+    expect(screen.queryByText("Alpha")).not.toBeInTheDocument();
+    expect(screen.getByText("No items selected")).toBeInTheDocument();
   });
 });
