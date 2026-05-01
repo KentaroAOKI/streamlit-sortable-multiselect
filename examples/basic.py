@@ -10,7 +10,7 @@ st.title("Sortable Multiselect")
 
 selected = sortable_multiselect(
     "Languages",
-    options=["Python", "TypeScript", "Rust", "Go", "Java", "Kotlin"],
+    options=["Python", "TypeScript", "Rust", "Go", "Java", "Kotlin", "スイフト"],
     default=["Python", "TypeScript"],
     placeholder="Add a language...",
     key="languages",

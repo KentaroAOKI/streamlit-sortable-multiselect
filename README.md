@@ -1,6 +1,6 @@
 # streamlit-sortable-multiselect
 
-A Streamlit custom component for selecting multiple string values and changing the selected order.
+A Streamlit custom component for searching, selecting, and reordering multiple string values.
 
 ## Install
 
@@ -32,6 +32,7 @@ selected = sortable_multiselect(
     "Favorite frameworks",
     options=["Streamlit", "FastAPI", "Django", "Flask"],
     default=["Streamlit"],
+    placeholder="Search frameworks...",
 )
 
 st.write(selected)

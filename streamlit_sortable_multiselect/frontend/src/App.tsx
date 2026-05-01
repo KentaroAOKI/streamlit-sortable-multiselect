@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { KeyboardEvent, useEffect, useMemo, useState } from "react";
 import {
   Streamlit,
   withStreamlitConnection,
@@ -135,6 +135,9 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
     [componentArgs.default_selected, options],
   );
   const [selected, setSelected] = useState<string[]>(defaultSelection);
+  const [query, setQuery] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -162,12 +165,30 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
   });
 
   const availableOptions = options.filter((option) => !selected.includes(option));
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredOptions = availableOptions.filter((option) =>
+    option.toLowerCase().includes(normalizedQuery),
+  );
+  const hasOptions = availableOptions.length > 0;
+  const activeOption = filteredOptions[highlightedIndex] ?? filteredOptions[0];
+
+  useEffect(() => {
+    setHighlightedIndex(0);
+  }, [query, selected.length, options]);
+
+  useEffect(() => {
+    if (highlightedIndex >= filteredOptions.length) {
+      setHighlightedIndex(Math.max(filteredOptions.length - 1, 0));
+    }
+  }, [filteredOptions.length, highlightedIndex]);
 
   function addValue(value: string) {
-    if (!value || disabled || selected.includes(value)) {
+    if (!value || disabled || selected.includes(value) || !options.includes(value)) {
       return;
     }
     setSelected((current) => [...current, value]);
+    setQuery("");
+    setIsOpen(false);
   }
 
   function removeValue(value: string) {
@@ -200,25 +221,94 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
     });
   }
 
+  function onSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (disabled) {
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setIsOpen(true);
+      setHighlightedIndex((current) =>
+        filteredOptions.length === 0 ? 0 : Math.min(current + 1, filteredOptions.length - 1),
+      );
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setIsOpen(true);
+      setHighlightedIndex((current) => Math.max(current - 1, 0));
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (activeOption) {
+        addValue(activeOption);
+      }
+      return;
+    }
+
+    if (event.key === "Escape") {
+      setIsOpen(false);
+    }
+  }
+
   return (
     <div className="sortable-multiselect" aria-disabled={disabled}>
       {label ? <label className="component-label">{label}</label> : null}
-      <select
-        className="add-select"
-        aria-label={label ? `Add item to ${label}` : "Add item"}
-        disabled={disabled || availableOptions.length === 0}
-        value=""
-        onChange={(event) => addValue(event.target.value)}
-      >
-        <option value="" disabled>
-          {availableOptions.length === 0 ? "No more options" : placeholder}
-        </option>
-        {availableOptions.map((option) => (
-          <option value={option} key={option}>
-            {option}
-          </option>
-        ))}
-      </select>
+      <div className="search-combobox">
+        <input
+          className="search-input"
+          type="text"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={isOpen && hasOptions}
+          aria-controls="sortable-multiselect-options"
+          aria-activedescendant={
+            isOpen && activeOption ? `sortable-multiselect-option-${highlightedIndex}` : undefined
+          }
+          aria-label={label ? `Search and add item to ${label}` : "Search and add item"}
+          disabled={disabled || !hasOptions}
+          placeholder={hasOptions ? placeholder : "No more options"}
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => setIsOpen(true)}
+          onBlur={() => setIsOpen(false)}
+          onKeyDown={onSearchKeyDown}
+        />
+        {isOpen && hasOptions ? (
+          <ul
+            id="sortable-multiselect-options"
+            className="options-list"
+            role="listbox"
+            aria-label="Available options"
+          >
+            {filteredOptions.length === 0 ? (
+              <li className="option-empty">No matching options</li>
+            ) : (
+              filteredOptions.map((option, index) => (
+                <li
+                  id={`sortable-multiselect-option-${index}`}
+                  className={`option-item${index === highlightedIndex ? " highlighted" : ""}`}
+                  key={option}
+                  role="option"
+                  aria-selected={index === highlightedIndex}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onMouseEnter={() => setHighlightedIndex(index)}
+                  onClick={() => addValue(option)}
+                >
+                  {option}
+                </li>
+              ))
+            )}
+          </ul>
+        ) : null}
+      </div>
 
       {selected.length === 0 ? (
         <div className="empty-state">No items selected</div>
