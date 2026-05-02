@@ -44,6 +44,7 @@ selected = sortable_multiselect(
     order_colors={1: "#fee2e2", 2: "#dcfce7"},
     max_selections=3,
     max_selections_placeholder="Choose up to 3 frameworks",
+    empty_message="No frameworks selected",
 )
 
 st.write(selected)

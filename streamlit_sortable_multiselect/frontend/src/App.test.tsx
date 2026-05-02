@@ -273,7 +273,7 @@ describe("SortableMultiselect", () => {
   });
 
   it("allows removing all selected items without restoring defaults", async () => {
-    renderComponent({ default_selected: ["Alpha"] });
+    renderComponent({ default_selected: ["Alpha"], empty_message: "Nothing selected yet" });
 
     fireEvent.click(screen.getByLabelText("Remove Alpha"));
 
@@ -282,6 +282,12 @@ describe("SortableMultiselect", () => {
     });
 
     expect(screen.queryByText("Alpha")).not.toBeInTheDocument();
+    expect(screen.getByText("Nothing selected yet")).toBeInTheDocument();
+  });
+
+  it("shows the default empty message when no custom message is configured", () => {
+    renderComponent({ default_selected: [] });
+
     expect(screen.getByText("No items selected")).toBeInTheDocument();
   });
 

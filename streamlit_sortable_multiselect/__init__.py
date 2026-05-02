@@ -8,7 +8,7 @@ from typing import Any, Iterable, Mapping, Sequence, cast
 
 import streamlit.components.v1 as components
 
-__version__ = "0.6.0"
+__version__ = "0.6.1"
 __all__ = ["sortable_multiselect"]
 
 _COMPONENT_NAME = "streamlit_sortable_multiselect"
@@ -107,6 +107,7 @@ def sortable_multiselect(
     order_colors: Mapping[int, str] | None = None,
     max_selections: int | None = None,
     max_selections_placeholder: str = "Selection limit reached",
+    empty_message: str = "No items selected",
     key: str | None = None,
 ) -> list[str]:
     """Select multiple string values and return them in user-defined order.
@@ -135,6 +136,8 @@ def sortable_multiselect(
         Maximum number of selected items. None means no limit.
     max_selections_placeholder:
         Placeholder text shown when the maximum selection count is reached.
+    empty_message:
+        Text shown when no items are selected.
     key:
         Optional Streamlit component key.
     """
@@ -144,6 +147,8 @@ def sortable_multiselect(
         raise TypeError("placeholder must be a string.")
     if not isinstance(max_selections_placeholder, str):
         raise TypeError("max_selections_placeholder must be a string.")
+    if not isinstance(empty_message, str):
+        raise TypeError("empty_message must be a string.")
     if not isinstance(disabled, bool):
         raise TypeError("disabled must be a bool.")
     if not isinstance(show_move_buttons, bool):
@@ -187,6 +192,7 @@ def sortable_multiselect(
         order_colors=order_color_values,
         max_selections=max_selection_count,
         max_selections_placeholder=max_selections_placeholder,
+        empty_message=empty_message,
         key=key,
         default=default_values,
     )

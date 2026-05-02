@@ -24,6 +24,7 @@ def test_returns_default_when_component_has_no_value(monkeypatch):
         order_colors={1: "#fee2e2", 2: "#dcfce7"},
         max_selections=2,
         max_selections_placeholder="Up to 2 items",
+        empty_message="Nothing selected",
         key="items",
     )
 
@@ -41,6 +42,7 @@ def test_returns_default_when_component_has_no_value(monkeypatch):
     assert calls[0]["order_colors"] == {1: "#fee2e2", 2: "#dcfce7"}
     assert calls[0]["max_selections"] == 2
     assert calls[0]["max_selections_placeholder"] == "Up to 2 items"
+    assert calls[0]["empty_message"] == "Nothing selected"
     assert calls[0]["key"] == "items"
 
 
@@ -89,6 +91,7 @@ def test_accepts_label_value_icon_options(monkeypatch):
         ({"label": "Items", "options": ["a"], "default": "a"}, TypeError),
         ({"label": "Items", "options": ["a"], "placeholder": 1}, TypeError),
         ({"label": "Items", "options": ["a"], "max_selections_placeholder": 1}, TypeError),
+        ({"label": "Items", "options": ["a"], "empty_message": 1}, TypeError),
         ({"label": "Items", "options": ["a"], "disabled": "no"}, TypeError),
         ({"label": "Items", "options": ["a"], "show_move_buttons": "yes"}, TypeError),
         ({"label": "Items", "options": ["a"], "show_numbers": "yes"}, TypeError),

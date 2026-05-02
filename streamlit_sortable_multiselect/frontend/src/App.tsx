@@ -41,6 +41,7 @@ type Args = {
   order_colors?: Record<string, string>;
   max_selections?: number | null;
   max_selections_placeholder?: string;
+  empty_message?: string;
 };
 
 type SortableItemProps = {
@@ -242,6 +243,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
   const placeholder = componentArgs.placeholder ?? "Select...";
   const maxSelectionsPlaceholder =
     componentArgs.max_selections_placeholder ?? "Selection limit reached";
+  const emptyMessage = componentArgs.empty_message ?? "No items selected";
   const disabled = Boolean(componentArgs.disabled || streamlitDisabled);
   const showMoveButtons = componentArgs.show_move_buttons ?? true;
   const showNumbers = componentArgs.show_numbers ?? false;
@@ -446,7 +448,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
       </div>
 
       {selected.length === 0 ? (
-        <div className="empty-state">No items selected</div>
+        <div className="empty-state">{emptyMessage}</div>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={selected} strategy={verticalListSortingStrategy}>
