@@ -284,4 +284,61 @@ describe("SortableMultiselect", () => {
     expect(screen.queryByText("Alpha")).not.toBeInTheDocument();
     expect(screen.getByText("No items selected")).toBeInTheDocument();
   });
+
+  it("disables adding options when the selection limit is reached", async () => {
+    renderComponent({
+      default_selected: ["Beta"],
+      max_selections: 2,
+      max_selections_placeholder: "Choose up to 2 items",
+    });
+
+    const input = screen.getByLabelText("Search and add item to Items");
+    fireEvent.focus(input);
+    fireEvent.click(screen.getByRole("option", { name: "Alpha" }));
+
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["Beta", "Alpha"]);
+    });
+
+    expect(input).toBeDisabled();
+    expect(input).toHaveAttribute("placeholder", "Choose up to 2 items");
+    expect(screen.queryByRole("listbox", { name: "Available options" })).not.toBeInTheDocument();
+  });
+
+  it("allows adding again after removing an item below the selection limit", async () => {
+    renderComponent({ default_selected: ["Alpha", "Beta"], max_selections: 2 });
+
+    const input = screen.getByLabelText("Search and add item to Items");
+    expect(input).toBeDisabled();
+
+    fireEvent.click(screen.getByLabelText("Remove Alpha"));
+
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["Beta"]);
+    });
+
+    expect(input).not.toBeDisabled();
+    fireEvent.focus(input);
+    fireEvent.click(screen.getByRole("option", { name: "Gamma" }));
+
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["Beta", "Gamma"]);
+    });
+  });
+
+  it("keeps remove and move controls enabled when the selection limit is reached", async () => {
+    renderComponent({ default_selected: ["Alpha", "Beta"], max_selections: 2 });
+
+    fireEvent.click(screen.getByLabelText("Move Alpha down"));
+
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["Beta", "Alpha"]);
+    });
+
+    fireEvent.click(screen.getByLabelText("Remove Beta"));
+
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["Alpha"]);
+    });
+  });
 });

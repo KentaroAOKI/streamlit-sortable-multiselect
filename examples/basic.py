@@ -17,6 +17,8 @@ selected = sortable_multiselect(
     "Languages",
     options=["Python","TypeScript", "Rust", "Go", "Java", "Kotlin", "C#", "Swift", "PHP"],
     default=["Python", "TypeScript"],
+    max_selections=5,
+    max_selections_placeholder="You cannot select more than five.",
     key="simple_languages",
 )
 
@@ -42,6 +44,8 @@ selected = sortable_multiselect(
     show_move_buttons=False,
     base_color="#eef2ff",
     order_colors={1: "#fee2e2", 3: "#dcfce7"},
+    max_selections=4,
+    max_selections_placeholder="You cannot select more than four.",
     key="languages",
 )
 

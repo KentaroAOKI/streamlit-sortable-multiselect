@@ -8,7 +8,7 @@ from typing import Any, Iterable, Mapping, Sequence, cast
 
 import streamlit.components.v1 as components
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 __all__ = ["sortable_multiselect"]
 
 _COMPONENT_NAME = "streamlit_sortable_multiselect"
@@ -85,6 +85,16 @@ def _validate_order_colors(order_colors: Mapping[int, str] | None) -> dict[int, 
     return result
 
 
+def _validate_max_selections(max_selections: int | None) -> int | None:
+    if max_selections is None:
+        return None
+    if isinstance(max_selections, bool) or not isinstance(max_selections, int):
+        raise TypeError("max_selections must be an integer or None.")
+    if max_selections < 0:
+        raise ValueError("max_selections must be 0 or greater.")
+    return max_selections
+
+
 def sortable_multiselect(
     label: str,
     options: Sequence[str | Mapping[str, Any]],
@@ -95,6 +105,8 @@ def sortable_multiselect(
     show_numbers: bool = False,
     base_color: str | None = None,
     order_colors: Mapping[int, str] | None = None,
+    max_selections: int | None = None,
+    max_selections_placeholder: str = "Selection limit reached",
     key: str | None = None,
 ) -> list[str]:
     """Select multiple string values and return them in user-defined order.
@@ -119,6 +131,10 @@ def sortable_multiselect(
         Background color applied to selected items.
     order_colors:
         Per-position background colors keyed by 1-based selected item position.
+    max_selections:
+        Maximum number of selected items. None means no limit.
+    max_selections_placeholder:
+        Placeholder text shown when the maximum selection count is reached.
     key:
         Optional Streamlit component key.
     """
@@ -126,6 +142,8 @@ def sortable_multiselect(
         raise TypeError("label must be a string.")
     if not isinstance(placeholder, str):
         raise TypeError("placeholder must be a string.")
+    if not isinstance(max_selections_placeholder, str):
+        raise TypeError("max_selections_placeholder must be a string.")
     if not isinstance(disabled, bool):
         raise TypeError("disabled must be a bool.")
     if not isinstance(show_move_buttons, bool):
@@ -139,6 +157,7 @@ def sortable_multiselect(
     option_values = [option["value"] for option in option_items]
     default_values = _validate_string_sequence("default", default)
     order_color_values = _validate_order_colors(order_colors)
+    max_selection_count = _validate_max_selections(max_selections)
 
     duplicate_options = sorted({value for value in option_values if option_values.count(value) > 1})
     if duplicate_options:
@@ -153,6 +172,9 @@ def sortable_multiselect(
     if duplicate_defaults:
         raise ValueError("default must not contain duplicate values.")
 
+    if max_selection_count is not None and len(default_values) > max_selection_count:
+        raise ValueError("default must not contain more values than max_selections.")
+
     component_value = _component_func(
         label=label,
         options=option_items,
@@ -163,6 +185,8 @@ def sortable_multiselect(
         show_numbers=show_numbers,
         base_color=base_color,
         order_colors=order_color_values,
+        max_selections=max_selection_count,
+        max_selections_placeholder=max_selections_placeholder,
         key=key,
         default=default_values,
     )

@@ -39,6 +39,8 @@ type Args = {
   show_numbers?: boolean;
   base_color?: string | null;
   order_colors?: Record<string, string>;
+  max_selections?: number | null;
+  max_selections_placeholder?: string;
 };
 
 type SortableItemProps = {
@@ -88,20 +90,30 @@ function normalizeOptions(options: Array<string | OptionItem> | undefined): Opti
   });
 }
 
-function normalizeSelection(values: string[] | undefined, options: OptionItem[]): string[] {
+function normalizeSelection(
+  values: string[] | undefined,
+  options: OptionItem[],
+  maxSelections?: number | null,
+): string[] {
   if (!Array.isArray(values)) {
     return [];
   }
 
   const optionValues = new Set(options.map((option) => option.value));
   const seen = new Set<string>();
-  return values.filter((value) => {
+  const normalized = values.filter((value) => {
     if (!optionValues.has(value) || seen.has(value)) {
       return false;
     }
     seen.add(value);
     return true;
   });
+
+  return typeof maxSelections === "number" ? normalized.slice(0, maxSelections) : normalized;
+}
+
+function selectionsEqual(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function getReadableTextColor(color: string | undefined): string | undefined {
@@ -228,14 +240,20 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
     [options],
   );
   const placeholder = componentArgs.placeholder ?? "Select...";
+  const maxSelectionsPlaceholder =
+    componentArgs.max_selections_placeholder ?? "Selection limit reached";
   const disabled = Boolean(componentArgs.disabled || streamlitDisabled);
   const showMoveButtons = componentArgs.show_move_buttons ?? true;
   const showNumbers = componentArgs.show_numbers ?? false;
   const baseColor = componentArgs.base_color ?? undefined;
   const orderColors = componentArgs.order_colors ?? {};
+  const maxSelections =
+    typeof componentArgs.max_selections === "number" && componentArgs.max_selections >= 0
+      ? componentArgs.max_selections
+      : null;
   const defaultSelection = useMemo(
-    () => normalizeSelection(componentArgs.default_selected, options),
-    [componentArgs.default_selected, options],
+    () => normalizeSelection(componentArgs.default_selected, options, maxSelections),
+    [componentArgs.default_selected, options, maxSelections],
   );
   const [selected, setSelected] = useState<string[]>(defaultSelection);
   const [query, setQuery] = useState("");
@@ -251,9 +269,10 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
 
   useEffect(() => {
     setSelected((current) => {
-      return normalizeSelection(current, options);
+      const normalized = normalizeSelection(current, options, maxSelections);
+      return selectionsEqual(current, normalized) ? current : normalized;
     });
-  }, [options]);
+  }, [options, maxSelections]);
 
   useEffect(() => {
     Streamlit.setComponentValue(selected);
@@ -264,6 +283,8 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
     Streamlit.setFrameHeight();
   });
 
+  const selectionLimitReached = maxSelections !== null && selected.length >= maxSelections;
+  const canAddOptions = !disabled && !selectionLimitReached;
   const availableOptions = options.filter((option) => !selected.includes(option.value));
   const normalizedQuery = query.trim().toLowerCase();
   const filteredOptions = availableOptions.filter((option) =>
@@ -283,12 +304,15 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
   }, [filteredOptions.length, highlightedIndex]);
 
   function addValue(value: string) {
-    if (!value || disabled || selected.includes(value) || !optionByValue.has(value)) {
+    if (!value || !canAddOptions || selected.includes(value) || !optionByValue.has(value)) {
       return;
     }
     setSelected((current) => [...current, value]);
     setQuery("");
-    setIsOpen(selected.length + 1 < options.length);
+    const nextSelectionCount = selected.length + 1;
+    setIsOpen(
+      nextSelectionCount < options.length && nextSelectionCount < (maxSelections ?? Infinity),
+    );
     window.setTimeout(() => {
       searchInputRef.current?.focus();
     }, 0);
@@ -325,7 +349,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
   }
 
   function onSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (disabled) {
+    if (!canAddOptions) {
       return;
     }
 
@@ -368,14 +392,18 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
           type="text"
           role="combobox"
           aria-autocomplete="list"
-          aria-expanded={isOpen && hasOptions}
+          aria-expanded={isOpen && canAddOptions && hasOptions}
           aria-controls="sortable-multiselect-options"
           aria-activedescendant={
-            isOpen && activeOption ? `sortable-multiselect-option-${highlightedIndex}` : undefined
+            isOpen && canAddOptions && activeOption
+              ? `sortable-multiselect-option-${highlightedIndex}`
+              : undefined
           }
           aria-label={label ? `Search and add item to ${label}` : "Search and add item"}
-          disabled={disabled || !hasOptions}
-          placeholder={hasOptions ? placeholder : "No more options"}
+          disabled={disabled || selectionLimitReached || !hasOptions}
+          placeholder={
+            selectionLimitReached ? maxSelectionsPlaceholder : hasOptions ? placeholder : "No more options"
+          }
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);
@@ -385,7 +413,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
           onBlur={() => setIsOpen(false)}
           onKeyDown={onSearchKeyDown}
         />
-        {isOpen && hasOptions ? (
+        {isOpen && canAddOptions && hasOptions ? (
           <ul
             id="sortable-multiselect-options"
             className="options-list"

@@ -42,6 +42,8 @@ selected = sortable_multiselect(
     show_numbers=True,
     base_color="#eef2ff",
     order_colors={1: "#fee2e2", 2: "#dcfce7"},
+    max_selections=3,
+    max_selections_placeholder="Choose up to 3 frameworks",
 )
 
 st.write(selected)
