@@ -42,6 +42,8 @@ type Args = {
   max_selections?: number | null;
   max_selections_placeholder?: string;
   empty_message?: string;
+  no_options_placeholder?: string;
+  selected_position?: "bottom" | "top";
 };
 
 type SortableItemProps = {
@@ -244,6 +246,8 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
   const maxSelectionsPlaceholder =
     componentArgs.max_selections_placeholder ?? "Selection limit reached";
   const emptyMessage = componentArgs.empty_message ?? "No items selected";
+  const noOptionsPlaceholder = componentArgs.no_options_placeholder ?? "No more options";
+  const selectedPosition = componentArgs.selected_position === "top" ? "top" : "bottom";
   const disabled = Boolean(componentArgs.disabled || streamlitDisabled);
   const showMoveButtons = componentArgs.show_move_buttons ?? true;
   const showNumbers = componentArgs.show_numbers ?? false;
@@ -384,9 +388,43 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
     }
   }
 
+  const selectedItems = selected.length === 0 ? (
+    <div className="empty-state">{emptyMessage}</div>
+  ) : (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+      <SortableContext items={selected} strategy={verticalListSortingStrategy}>
+        <ul className="selected-list" aria-label="Selected items">
+          {selected.map((item, index) => {
+            const option = optionByValue.get(item) ?? { label: item, value: item, icon_url: null };
+            return (
+              <SortableItem
+                key={item}
+                id={item}
+                label={option.label}
+                iconUrl={option.icon_url}
+                index={index}
+                count={selected.length}
+                disabled={disabled}
+                showMoveButtons={showMoveButtons}
+                showNumber={showNumbers}
+                itemColor={orderColors[String(index + 1)] ?? baseColor}
+                onRemove={removeValue}
+                onMove={moveValue}
+              />
+            );
+          })}
+        </ul>
+      </SortableContext>
+    </DndContext>
+  );
+
   return (
-    <div className="sortable-multiselect" aria-disabled={disabled}>
+    <div
+      className={`sortable-multiselect selected-position-${selectedPosition}`}
+      aria-disabled={disabled}
+    >
       {label ? <label className="component-label">{label}</label> : null}
+      {selectedPosition === "top" ? selectedItems : null}
       <div className="search-combobox">
         <input
           ref={searchInputRef}
@@ -404,7 +442,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
           aria-label={label ? `Search and add item to ${label}` : "Search and add item"}
           disabled={disabled || selectionLimitReached || !hasOptions}
           placeholder={
-            selectionLimitReached ? maxSelectionsPlaceholder : hasOptions ? placeholder : "No more options"
+            selectionLimitReached ? maxSelectionsPlaceholder : hasOptions ? placeholder : noOptionsPlaceholder
           }
           value={query}
           onChange={(event) => {
@@ -447,35 +485,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
         ) : null}
       </div>
 
-      {selected.length === 0 ? (
-        <div className="empty-state">{emptyMessage}</div>
-      ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-          <SortableContext items={selected} strategy={verticalListSortingStrategy}>
-            <ul className="selected-list" aria-label="Selected items">
-              {selected.map((item, index) => {
-                const option = optionByValue.get(item) ?? { label: item, value: item, icon_url: null };
-                return (
-                <SortableItem
-                  key={item}
-                  id={item}
-                  label={option.label}
-                  iconUrl={option.icon_url}
-                  index={index}
-                  count={selected.length}
-                  disabled={disabled}
-                  showMoveButtons={showMoveButtons}
-                  showNumber={showNumbers}
-                  itemColor={orderColors[String(index + 1)] ?? baseColor}
-                  onRemove={removeValue}
-                  onMove={moveValue}
-                />
-                );
-              })}
-            </ul>
-          </SortableContext>
-        </DndContext>
-      )}
+      {selectedPosition === "bottom" ? selectedItems : null}
     </div>
   );
 }

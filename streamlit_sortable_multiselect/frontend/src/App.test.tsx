@@ -53,6 +53,33 @@ describe("SortableMultiselect", () => {
     });
   });
 
+  it("renders selected items below the search input by default", () => {
+    const { container } = renderComponent({ default_selected: ["Beta"] });
+    const search = container.querySelector(".search-combobox");
+    const selectedList = container.querySelector(".selected-list");
+
+    expect(search).not.toBeNull();
+    expect(selectedList).not.toBeNull();
+    expect(search!.compareDocumentPosition(selectedList!) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  it("renders selected items above the search input when configured", () => {
+    const { container } = renderComponent({
+      default_selected: ["Beta"],
+      selected_position: "top",
+    });
+    const search = container.querySelector(".search-combobox");
+    const selectedList = container.querySelector(".selected-list");
+
+    expect(search).not.toBeNull();
+    expect(selectedList).not.toBeNull();
+    expect(selectedList!.compareDocumentPosition(search!) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
   it("keeps options open after adding an item so another item can be selected", async () => {
     renderComponent();
 
@@ -296,6 +323,7 @@ describe("SortableMultiselect", () => {
       default_selected: ["Beta"],
       max_selections: 2,
       max_selections_placeholder: "Choose up to 2 items",
+      no_options_placeholder: "All items selected",
     });
 
     const input = screen.getByLabelText("Search and add item to Items");
@@ -309,6 +337,25 @@ describe("SortableMultiselect", () => {
     expect(input).toBeDisabled();
     expect(input).toHaveAttribute("placeholder", "Choose up to 2 items");
     expect(screen.queryByRole("listbox", { name: "Available options" })).not.toBeInTheDocument();
+  });
+
+  it("shows the default no-options placeholder when every option is selected", () => {
+    renderComponent({ default_selected: ["Alpha", "Beta", "Gamma"] });
+
+    const input = screen.getByLabelText("Search and add item to Items");
+    expect(input).toBeDisabled();
+    expect(input).toHaveAttribute("placeholder", "No more options");
+  });
+
+  it("shows a custom no-options placeholder when every option is selected", () => {
+    renderComponent({
+      default_selected: ["Alpha", "Beta", "Gamma"],
+      no_options_placeholder: "All items selected",
+    });
+
+    const input = screen.getByLabelText("Search and add item to Items");
+    expect(input).toBeDisabled();
+    expect(input).toHaveAttribute("placeholder", "All items selected");
   });
 
   it("allows adding again after removing an item below the selection limit", async () => {

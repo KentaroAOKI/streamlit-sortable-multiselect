@@ -25,6 +25,8 @@ def test_returns_default_when_component_has_no_value(monkeypatch):
         max_selections=2,
         max_selections_placeholder="Up to 2 items",
         empty_message="Nothing selected",
+        no_options_placeholder="No choices left",
+        selected_position="top",
         key="items",
     )
 
@@ -43,6 +45,8 @@ def test_returns_default_when_component_has_no_value(monkeypatch):
     assert calls[0]["max_selections"] == 2
     assert calls[0]["max_selections_placeholder"] == "Up to 2 items"
     assert calls[0]["empty_message"] == "Nothing selected"
+    assert calls[0]["no_options_placeholder"] == "No choices left"
+    assert calls[0]["selected_position"] == "top"
     assert calls[0]["key"] == "items"
 
 
@@ -92,6 +96,8 @@ def test_accepts_label_value_icon_options(monkeypatch):
         ({"label": "Items", "options": ["a"], "placeholder": 1}, TypeError),
         ({"label": "Items", "options": ["a"], "max_selections_placeholder": 1}, TypeError),
         ({"label": "Items", "options": ["a"], "empty_message": 1}, TypeError),
+        ({"label": "Items", "options": ["a"], "no_options_placeholder": 1}, TypeError),
+        ({"label": "Items", "options": ["a"], "selected_position": 1}, TypeError),
         ({"label": "Items", "options": ["a"], "disabled": "no"}, TypeError),
         ({"label": "Items", "options": ["a"], "show_move_buttons": "yes"}, TypeError),
         ({"label": "Items", "options": ["a"], "show_numbers": "yes"}, TypeError),
@@ -106,6 +112,7 @@ def test_accepts_label_value_icon_options(monkeypatch):
         ({"label": "Items", "options": ["a"], "default": ["b"]}, ValueError),
         ({"label": "Items", "options": ["a", "b"], "default": ["a", "a"]}, ValueError),
         ({"label": "Items", "options": ["a"], "max_selections": -1}, ValueError),
+        ({"label": "Items", "options": ["a"], "selected_position": "left"}, ValueError),
         ({"label": "Items", "options": ["a", "b"], "default": ["a", "b"], "max_selections": 1}, ValueError),
     ],
 )
@@ -127,3 +134,4 @@ def test_allows_zero_max_selections(monkeypatch):
 
     assert result == []
     assert calls[0]["max_selections"] == 0
+    assert calls[0]["selected_position"] == "bottom"
