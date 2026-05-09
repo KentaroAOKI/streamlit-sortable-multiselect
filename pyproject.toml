@@ -9,7 +9,7 @@ description = "A Streamlit custom component for selecting and reordering multipl
 readme = "README.md"
 requires-python = ">=3.9"
 authors = [
-  { name = "Developer" },
+  { name = "Kentaro Aoki" },
 ]
 license = "MIT"
 keywords = ["streamlit", "component", "multiselect", "sortable", "drag-and-drop"]
