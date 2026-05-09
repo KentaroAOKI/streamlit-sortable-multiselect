@@ -8,7 +8,7 @@ from typing import Any, Iterable, Mapping, Sequence, cast
 
 import streamlit.components.v1 as components
 
-__version__ = "0.6.1"
+__version__ = "0.7.0"
 __all__ = ["sortable_multiselect"]
 
 _COMPONENT_NAME = "streamlit_sortable_multiselect"
@@ -108,6 +108,8 @@ def sortable_multiselect(
     max_selections: int | None = None,
     max_selections_placeholder: str = "Selection limit reached",
     empty_message: str = "No items selected",
+    no_options_placeholder: str = "No more options",
+    selected_position: str = "bottom",
     key: str | None = None,
 ) -> list[str]:
     """Select multiple string values and return them in user-defined order.
@@ -138,6 +140,10 @@ def sortable_multiselect(
         Placeholder text shown when the maximum selection count is reached.
     empty_message:
         Text shown when no items are selected.
+    no_options_placeholder:
+        Placeholder text shown when there are no more options to add.
+    selected_position:
+        Position of selected items relative to the select control. Use "bottom" or "top".
     key:
         Optional Streamlit component key.
     """
@@ -149,6 +155,12 @@ def sortable_multiselect(
         raise TypeError("max_selections_placeholder must be a string.")
     if not isinstance(empty_message, str):
         raise TypeError("empty_message must be a string.")
+    if not isinstance(no_options_placeholder, str):
+        raise TypeError("no_options_placeholder must be a string.")
+    if not isinstance(selected_position, str):
+        raise TypeError("selected_position must be a string.")
+    if selected_position not in {"bottom", "top"}:
+        raise ValueError('selected_position must be "bottom" or "top".')
     if not isinstance(disabled, bool):
         raise TypeError("disabled must be a bool.")
     if not isinstance(show_move_buttons, bool):
@@ -193,6 +205,8 @@ def sortable_multiselect(
         max_selections=max_selection_count,
         max_selections_placeholder=max_selections_placeholder,
         empty_message=empty_message,
+        no_options_placeholder=no_options_placeholder,
+        selected_position=selected_position,
         key=key,
         default=default_values,
     )

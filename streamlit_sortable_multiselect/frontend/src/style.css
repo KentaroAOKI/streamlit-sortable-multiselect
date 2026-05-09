@@ -208,3 +208,8 @@ input {
   padding: 10px;
   text-align: center;
 }
+
+.selected-position-top .selected-list,
+.selected-position-top .empty-state {
+  margin: 0 0 8px;
+}

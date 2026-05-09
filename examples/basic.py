@@ -45,6 +45,8 @@ selected = sortable_multiselect(
     max_selections=4,
     max_selections_placeholder="You cannot select more than four.",
     empty_message="No languages selected.",
+    no_options_placeholder="All languages selected.",
+    selected_position="top",
     key="languages",
 )
 
