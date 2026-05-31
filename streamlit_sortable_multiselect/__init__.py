@@ -8,7 +8,7 @@ from typing import Any, Iterable, Mapping, Sequence, cast
 
 import streamlit.components.v1 as components
 
-__version__ = "0.7.2"
+__version__ = "0.7.3"
 __all__ = ["sortable_multiselect"]
 
 _COMPONENT_NAME = "streamlit_sortable_multiselect"
