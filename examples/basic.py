@@ -47,6 +47,8 @@ selected = sortable_multiselect(
     empty_message="No languages selected.",
     no_options_placeholder="All languages selected.",
     selected_position="top",
+    icon_size=28,
+    options_max_height=360,
     key="languages",
 )
 

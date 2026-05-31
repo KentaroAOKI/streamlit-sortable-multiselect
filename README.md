@@ -47,6 +47,8 @@ selected = sortable_multiselect(
     empty_message="No frameworks selected",
     no_options_placeholder="All frameworks selected",
     selected_position="top",
+    icon_size=24,
+    options_max_height=260,
 )
 
 st.write(selected)
@@ -72,6 +74,8 @@ st.write(selected)
 | `empty_message` | `str` | `"No items selected"` | Message shown where the selected list appears when no items are selected. |
 | `no_options_placeholder` | `str` | `"No more options"` | Placeholder shown when every option is already selected and there are no more options to add. |
 | `selected_position` | `str` | `"bottom"` | Position of the selected item list relative to the search/add input. Use `"bottom"` or `"top"`. |
+| `icon_size` | `int` | `20` | Icon display size in pixels for `icon_url` images. Images are displayed inside a square area while preserving their aspect ratio. |
+| `options_max_height` | `int` | `190` | Maximum height in pixels for the available options dropdown. |
 | `key` | `str \| None` | `None` | Optional Streamlit component key. Use this when rendering multiple sortable multiselects. |
 
 Option dictionaries use this shape:

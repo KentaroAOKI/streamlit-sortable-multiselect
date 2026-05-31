@@ -8,7 +8,7 @@ from typing import Any, Iterable, Mapping, Sequence, cast
 
 import streamlit.components.v1 as components
 
-__version__ = "0.7.0"
+__version__ = "0.7.2"
 __all__ = ["sortable_multiselect"]
 
 _COMPONENT_NAME = "streamlit_sortable_multiselect"
@@ -95,6 +95,22 @@ def _validate_max_selections(max_selections: int | None) -> int | None:
     return max_selections
 
 
+def _validate_icon_size(icon_size: int) -> int:
+    if isinstance(icon_size, bool) or not isinstance(icon_size, int):
+        raise TypeError("icon_size must be an integer.")
+    if icon_size < 1:
+        raise ValueError("icon_size must be 1 or greater.")
+    return icon_size
+
+
+def _validate_options_max_height(options_max_height: int) -> int:
+    if isinstance(options_max_height, bool) or not isinstance(options_max_height, int):
+        raise TypeError("options_max_height must be an integer.")
+    if options_max_height < 1:
+        raise ValueError("options_max_height must be 1 or greater.")
+    return options_max_height
+
+
 def sortable_multiselect(
     label: str,
     options: Sequence[str | Mapping[str, Any]],
@@ -110,6 +126,8 @@ def sortable_multiselect(
     empty_message: str = "No items selected",
     no_options_placeholder: str = "No more options",
     selected_position: str = "bottom",
+    icon_size: int = 20,
+    options_max_height: int = 190,
     key: str | None = None,
 ) -> list[str]:
     """Select multiple string values and return them in user-defined order.
@@ -144,6 +162,10 @@ def sortable_multiselect(
         Placeholder text shown when there are no more options to add.
     selected_position:
         Position of selected items relative to the select control. Use "bottom" or "top".
+    icon_size:
+        Icon display size in pixels. Images keep their aspect ratio within this square size.
+    options_max_height:
+        Maximum height in pixels for the available options dropdown.
     key:
         Optional Streamlit component key.
     """
@@ -175,6 +197,8 @@ def sortable_multiselect(
     default_values = _validate_string_sequence("default", default)
     order_color_values = _validate_order_colors(order_colors)
     max_selection_count = _validate_max_selections(max_selections)
+    icon_size_value = _validate_icon_size(icon_size)
+    options_max_height_value = _validate_options_max_height(options_max_height)
 
     duplicate_options = sorted({value for value in option_values if option_values.count(value) > 1})
     if duplicate_options:
@@ -207,6 +231,8 @@ def sortable_multiselect(
         empty_message=empty_message,
         no_options_placeholder=no_options_placeholder,
         selected_position=selected_position,
+        icon_size=icon_size_value,
+        options_max_height=options_max_height_value,
         key=key,
         default=default_values,
     )

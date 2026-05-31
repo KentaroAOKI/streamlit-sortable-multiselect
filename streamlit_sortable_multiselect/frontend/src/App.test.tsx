@@ -137,6 +137,58 @@ describe("SortableMultiselect", () => {
     });
   });
 
+  it("uses the default icon size when no custom size is configured", () => {
+    const { container } = renderComponent({
+      options: [{ label: "Python", value: "python", icon_url: "https://example.com/python.png" }],
+      default_selected: ["python"],
+    });
+
+    expect(container.querySelector(".sortable-multiselect")).toHaveStyle({
+      "--icon-size": "20px",
+    });
+  });
+
+  it("applies a custom icon size to option and selected icons", () => {
+    const { container } = renderComponent({
+      options: [
+        { label: "Python", value: "python", icon_url: "https://example.com/python.png" },
+        { label: "TypeScript", value: "typescript", icon_url: "https://example.com/ts.png" },
+      ],
+      default_selected: ["python"],
+      icon_size: 28,
+    });
+
+    expect(container.querySelector(".sortable-multiselect")).toHaveStyle({
+      "--icon-size": "28px",
+    });
+    expect(container.querySelector(".item-icon")).toHaveAttribute(
+      "src",
+      "https://example.com/python.png",
+    );
+
+    fireEvent.focus(screen.getByLabelText("Search and add item to Items"));
+    expect(container.querySelector(".option-icon")).toHaveAttribute(
+      "src",
+      "https://example.com/ts.png",
+    );
+  });
+
+  it("uses the default options max height when no custom height is configured", () => {
+    const { container } = renderComponent();
+
+    expect(container.querySelector(".sortable-multiselect")).toHaveStyle({
+      "--options-max-height": "190px",
+    });
+  });
+
+  it("applies a custom options max height", () => {
+    const { container } = renderComponent({ options_max_height: 260 });
+
+    expect(container.querySelector(".sortable-multiselect")).toHaveStyle({
+      "--options-max-height": "260px",
+    });
+  });
+
   it("adds the highlighted option with enter", async () => {
     renderComponent();
 
