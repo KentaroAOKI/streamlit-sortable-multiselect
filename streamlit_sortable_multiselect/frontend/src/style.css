@@ -61,7 +61,7 @@ input {
   left: 0;
   list-style: none;
   margin: 4px 0 0;
-  max-height: 190px;
+  max-height: var(--options-max-height, 190px);
   overflow-y: auto;
   padding: 4px;
   position: absolute;
@@ -175,9 +175,9 @@ input {
 .option-icon {
   border-radius: 4px;
   flex: 0 0 auto;
-  height: 20px;
+  height: var(--icon-size, 20px);
   object-fit: contain;
-  width: 20px;
+  width: var(--icon-size, 20px);
 }
 
 .item-number {

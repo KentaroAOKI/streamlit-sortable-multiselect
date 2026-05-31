@@ -44,6 +44,8 @@ type Args = {
   empty_message?: string;
   no_options_placeholder?: string;
   selected_position?: "bottom" | "top";
+  icon_size?: number;
+  options_max_height?: number;
 };
 
 type SortableItemProps = {
@@ -66,6 +68,8 @@ type ItemStyle = {
   "--item-bg"?: string;
   "--item-fg"?: string;
   "--item-muted-fg"?: string;
+  "--icon-size"?: string;
+  "--options-max-height"?: string;
 };
 
 function normalizeOptions(options: Array<string | OptionItem> | undefined): OptionItem[] {
@@ -248,6 +252,14 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
   const emptyMessage = componentArgs.empty_message ?? "No items selected";
   const noOptionsPlaceholder = componentArgs.no_options_placeholder ?? "No more options";
   const selectedPosition = componentArgs.selected_position === "top" ? "top" : "bottom";
+  const iconSize =
+    typeof componentArgs.icon_size === "number" && componentArgs.icon_size >= 1
+      ? componentArgs.icon_size
+      : 20;
+  const optionsMaxHeight =
+    typeof componentArgs.options_max_height === "number" && componentArgs.options_max_height >= 1
+      ? componentArgs.options_max_height
+      : 190;
   const disabled = Boolean(componentArgs.disabled || streamlitDisabled);
   const showMoveButtons = componentArgs.show_move_buttons ?? true;
   const showNumbers = componentArgs.show_numbers ?? false;
@@ -422,6 +434,12 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
     <div
       className={`sortable-multiselect selected-position-${selectedPosition}`}
       aria-disabled={disabled}
+      style={
+        {
+          "--icon-size": `${iconSize}px`,
+          "--options-max-height": `${optionsMaxHeight}px`,
+        } as ItemStyle
+      }
     >
       {label ? <label className="component-label">{label}</label> : null}
       {selectedPosition === "top" ? selectedItems : null}
