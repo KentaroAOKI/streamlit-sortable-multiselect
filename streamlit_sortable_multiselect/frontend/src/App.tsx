@@ -1,9 +1,18 @@
-import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  HTMLProps,
+  KeyboardEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Streamlit,
   withStreamlitConnection,
   ComponentProps,
 } from "streamlit-component-lib";
+import { FixedSizeList, ListChildComponentProps } from "react-window";
 import {
   closestCenter,
   DndContext,
@@ -123,9 +132,42 @@ function selectionsEqual(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
+// Must match the `.option-item` height in style.css for correct windowing.
+const OPTION_ROW_HEIGHT = 36;
+
+// Cache contrast per color: the DOM probe below forces a reflow, so run it once.
+const readableTextColorCache = new Map<string, string | undefined>();
+
+// Stable outer/inner elements for react-window that carry the listbox semantics.
+const OptionsListOuter = forwardRef<HTMLDivElement, HTMLProps<HTMLDivElement>>(
+  function OptionsListOuter(props, ref) {
+    return (
+      <div
+        ref={ref}
+        {...props}
+        id="sortable-multiselect-options"
+        className="options-scroll"
+        role="listbox"
+        aria-label="Available options"
+      />
+    );
+  },
+);
+
+const OptionsListInner = forwardRef<HTMLUListElement, HTMLProps<HTMLUListElement>>(
+  function OptionsListInner(props, ref) {
+    return <ul ref={ref} {...props} className="options-inner" role="presentation" />;
+  },
+);
+
 function getReadableTextColor(color: string | undefined): string | undefined {
   if (!color || typeof document === "undefined") {
     return undefined;
+  }
+
+  const cached = readableTextColorCache.get(color);
+  if (cached !== undefined || readableTextColorCache.has(color)) {
+    return cached;
   }
 
   const probe = document.createElement("span");
@@ -135,15 +177,17 @@ function getReadableTextColor(color: string | undefined): string | undefined {
   document.body.removeChild(probe);
 
   const match = computedColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-  if (!match) {
-    return undefined;
+  let result: string | undefined;
+  if (match) {
+    const red = Number(match[1]);
+    const green = Number(match[2]);
+    const blue = Number(match[3]);
+    const luminance = (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255;
+    result = luminance > 0.58 ? "#111827" : "#ffffff";
   }
 
-  const red = Number(match[1]);
-  const green = Number(match[2]);
-  const blue = Number(match[3]);
-  const luminance = (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255;
-  return luminance > 0.58 ? "#111827" : "#ffffff";
+  readableTextColorCache.set(color, result);
+  return result;
 }
 
 function SortableItem({
@@ -278,6 +322,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
   const [isOpen, setIsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const optionsListRef = useRef<FixedSizeList>(null);
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -303,12 +348,35 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
 
   const selectionLimitReached = maxSelections !== null && selected.length >= maxSelections;
   const canAddOptions = !disabled && !selectionLimitReached;
-  const availableOptions = options.filter((option) => !selected.includes(option.value));
-  const normalizedQuery = query.trim().toLowerCase();
-  const filteredOptions = availableOptions.filter((option) =>
-    option.label.toLowerCase().includes(normalizedQuery),
+  const selectedSet = useMemo(() => new Set(selected), [selected]);
+  // Lowercase labels once per options change, not on every keystroke/render.
+  const searchIndex = useMemo(
+    () => options.map((option) => ({ option, haystack: option.label.toLowerCase() })),
+    [options],
   );
-  const hasOptions = availableOptions.length > 0;
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredOptions = useMemo(() => {
+    const result: OptionItem[] = [];
+    for (const entry of searchIndex) {
+      if (selectedSet.has(entry.option.value)) {
+        continue;
+      }
+      if (normalizedQuery && !entry.haystack.includes(normalizedQuery)) {
+        continue;
+      }
+      result.push(entry.option);
+    }
+    return result;
+  }, [searchIndex, selectedSet, normalizedQuery]);
+  const availableCount = useMemo(
+    () =>
+      searchIndex.reduce(
+        (count, entry) => (selectedSet.has(entry.option.value) ? count : count + 1),
+        0,
+      ),
+    [searchIndex, selectedSet],
+  );
+  const hasOptions = availableCount > 0;
   const activeOption = filteredOptions[highlightedIndex] ?? filteredOptions[0];
 
   useEffect(() => {
@@ -320,6 +388,12 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
       setHighlightedIndex(Math.max(filteredOptions.length - 1, 0));
     }
   }, [filteredOptions.length, highlightedIndex]);
+
+  useEffect(() => {
+    if (isOpen && canAddOptions) {
+      optionsListRef.current?.scrollToItem(highlightedIndex, "auto");
+    }
+  }, [highlightedIndex, isOpen, canAddOptions]);
 
   function addValue(value: string) {
     if (!value || !canAddOptions || selected.includes(value) || !optionByValue.has(value)) {
@@ -472,34 +546,55 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
           onKeyDown={onSearchKeyDown}
         />
         {isOpen && canAddOptions && hasOptions ? (
-          <ul
-            id="sortable-multiselect-options"
-            className="options-list"
-            role="listbox"
-            aria-label="Available options"
-          >
+          <div className="options-popover">
             {filteredOptions.length === 0 ? (
-              <li className="option-empty">No matching options</li>
+              <ul
+                id="sortable-multiselect-options"
+                className="options-scroll"
+                role="listbox"
+                aria-label="Available options"
+              >
+                <li className="option-empty">No matching options</li>
+              </ul>
             ) : (
-              filteredOptions.map((option, index) => (
-                <li
-                  id={`sortable-multiselect-option-${index}`}
-                  className={`option-item${index === highlightedIndex ? " highlighted" : ""}`}
-                  key={option.value}
-                  role="option"
-                  aria-selected={index === highlightedIndex}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onMouseEnter={() => setHighlightedIndex(index)}
-                  onClick={() => addValue(option.value)}
-                >
-                  {option.icon_url ? (
-                    <img className="option-icon" src={option.icon_url} alt="" aria-hidden="true" />
-                  ) : null}
-                  <span>{option.label}</span>
-                </li>
-              ))
+              <FixedSizeList
+                ref={optionsListRef}
+                outerElementType={OptionsListOuter}
+                innerElementType={OptionsListInner}
+                height={Math.min(optionsMaxHeight, filteredOptions.length * OPTION_ROW_HEIGHT)}
+                itemCount={filteredOptions.length}
+                itemSize={OPTION_ROW_HEIGHT}
+                width="100%"
+                overscanCount={8}
+              >
+                {({ index, style }: ListChildComponentProps) => {
+                  const option = filteredOptions[index];
+                  return (
+                    <li
+                      id={`sortable-multiselect-option-${index}`}
+                      className={`option-item${index === highlightedIndex ? " highlighted" : ""}`}
+                      style={style}
+                      role="option"
+                      aria-selected={index === highlightedIndex}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onMouseEnter={() => setHighlightedIndex(index)}
+                      onClick={() => addValue(option.value)}
+                    >
+                      {option.icon_url ? (
+                        <img
+                          className="option-icon"
+                          src={option.icon_url}
+                          alt=""
+                          aria-hidden="true"
+                        />
+                      ) : null}
+                      <span className="option-label">{option.label}</span>
+                    </li>
+                  );
+                }}
+              </FixedSizeList>
             )}
-          </ul>
+          </div>
         ) : null}
       </div>
 

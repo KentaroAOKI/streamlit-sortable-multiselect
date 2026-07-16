@@ -101,6 +101,19 @@ describe("SortableMultiselect", () => {
     });
   });
 
+  it("virtualizes the options list so only a small window of rows is in the DOM", () => {
+    const options = Array.from({ length: 5000 }, (_, index) => `Option ${index}`);
+    const { container } = renderComponent({ options, default_selected: [] });
+
+    fireEvent.focus(screen.getByLabelText("Search and add item to Items"));
+
+    const renderedRows = container.querySelectorAll(".option-item");
+    expect(renderedRows.length).toBeGreaterThan(0);
+    // Windowing must keep the DOM tiny regardless of option count.
+    expect(renderedRows.length).toBeLessThan(50);
+    expect(screen.getByText("Option 0")).toBeInTheDocument();
+  });
+
   it("filters options case-insensitively while typing", () => {
     renderComponent();
 
