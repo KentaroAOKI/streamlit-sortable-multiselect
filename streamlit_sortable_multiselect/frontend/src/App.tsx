@@ -396,7 +396,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
   }, [highlightedIndex, isOpen, canAddOptions]);
 
   function addValue(value: string) {
-    if (!value || !canAddOptions || selected.includes(value) || !optionByValue.has(value)) {
+    if (!value || !canAddOptions || selectedSet.has(value) || !optionByValue.has(value)) {
       return;
     }
     setSelected((current) => [...current, value]);
