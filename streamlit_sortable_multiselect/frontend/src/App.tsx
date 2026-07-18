@@ -379,7 +379,12 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
     componentArgs.suggestions_icon_url_path === undefined
       ? "icon_url"
       : componentArgs.suggestions_icon_url_path;
-  const suggestionsHeadersJson = JSON.stringify(componentArgs.suggestions_headers ?? {});
+  const suggestionsHeadersJson = useMemo(() => {
+    const entries = Object.entries(componentArgs.suggestions_headers ?? {}).sort(([left], [right]) =>
+      left.localeCompare(right),
+    );
+    return JSON.stringify(Object.fromEntries(entries));
+  }, [componentArgs.suggestions_headers]);
   const suggestionsHeaders = useMemo(
     () => JSON.parse(suggestionsHeadersJson) as Record<string, string>,
     [suggestionsHeadersJson],
