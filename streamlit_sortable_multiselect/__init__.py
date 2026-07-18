@@ -8,7 +8,7 @@ from typing import Any, Iterable, Mapping, Sequence, cast
 
 import streamlit.components.v1 as components
 
-__version__ = "0.7.3"
+__version__ = "0.7.4"
 __all__ = ["sortable_multiselect"]
 
 _COMPONENT_NAME = "streamlit_sortable_multiselect"
@@ -200,17 +200,31 @@ def sortable_multiselect(
     icon_size_value = _validate_icon_size(icon_size)
     options_max_height_value = _validate_options_max_height(options_max_height)
 
-    duplicate_options = sorted({value for value in option_values if option_values.count(value) > 1})
-    if duplicate_options:
+    # Set membership keeps these checks O(n); list.count / `in list` here are
+    # O(n**2) and hang the rerun once options reaches tens of thousands.
+    seen_option_values: set[str] = set()
+    has_duplicate_options = False
+    for value in option_values:
+        if value in seen_option_values:
+            has_duplicate_options = True
+            break
+        seen_option_values.add(value)
+    if has_duplicate_options:
         raise ValueError("options must not contain duplicate values.")
 
-    missing_defaults = [value for value in default_values if value not in option_values]
+    missing_defaults = [value for value in default_values if value not in seen_option_values]
     if missing_defaults:
         missing = ", ".join(repr(value) for value in missing_defaults)
         raise ValueError(f"default contains values not present in options: {missing}.")
 
-    duplicate_defaults = sorted({value for value in default_values if default_values.count(value) > 1})
-    if duplicate_defaults:
+    seen_default_values: set[str] = set()
+    has_duplicate_defaults = False
+    for value in default_values:
+        if value in seen_default_values:
+            has_duplicate_defaults = True
+            break
+        seen_default_values.add(value)
+    if has_duplicate_defaults:
         raise ValueError("default must not contain duplicate values.")
 
     if max_selection_count is not None and len(default_values) > max_selection_count:

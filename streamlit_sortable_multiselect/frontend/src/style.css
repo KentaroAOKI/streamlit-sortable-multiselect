@@ -52,22 +52,35 @@ input {
   color: #6b7280;
 }
 
-.options-list {
+.options-popover {
   background: #ffffff;
   border: 1px solid #d1d5db;
   border-radius: 6px;
   box-shadow: 0 6px 18px rgba(49, 51, 63, 0.14);
   box-sizing: border-box;
   left: 0;
-  list-style: none;
   margin: 4px 0 0;
-  max-height: var(--options-max-height, 190px);
-  overflow-y: auto;
   padding: 4px;
   position: absolute;
   right: 0;
   top: 100%;
   z-index: 10;
+}
+
+/* Scroll container for the virtualized list and the empty-state list. */
+.options-scroll {
+  box-sizing: border-box;
+  list-style: none;
+  margin: 0;
+  max-height: var(--options-max-height, 190px);
+  overflow-y: auto;
+  padding: 0;
+}
+
+.options-inner {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
 .option-item,
@@ -84,6 +97,13 @@ input {
 
 .option-item {
   cursor: pointer;
+  overflow: hidden;
+}
+
+.option-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .option-item.highlighted,
