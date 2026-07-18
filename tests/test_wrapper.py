@@ -29,6 +29,17 @@ def test_returns_default_when_component_has_no_value(monkeypatch):
         selected_position="top",
         icon_size=24,
         options_max_height=260,
+        suggestions_api_url="https://example.com/suggest",
+        suggestions_query_param="query",
+        suggestions_response_path="data.items",
+        suggestions_label_path="name",
+        suggestions_value_path="id",
+        suggestions_icon_url_path="image.url",
+        suggestions_headers={"X-Public-Client": "streamlit"},
+        suggestions_min_chars=2,
+        suggestions_debounce_ms=450,
+        suggestions_loading_message="Searching...",
+        suggestions_error_message="Search failed",
         key="items",
     )
 
@@ -51,6 +62,17 @@ def test_returns_default_when_component_has_no_value(monkeypatch):
     assert calls[0]["selected_position"] == "top"
     assert calls[0]["icon_size"] == 24
     assert calls[0]["options_max_height"] == 260
+    assert calls[0]["suggestions_api_url"] == "https://example.com/suggest"
+    assert calls[0]["suggestions_query_param"] == "query"
+    assert calls[0]["suggestions_response_path"] == "data.items"
+    assert calls[0]["suggestions_label_path"] == "name"
+    assert calls[0]["suggestions_value_path"] == "id"
+    assert calls[0]["suggestions_icon_url_path"] == "image.url"
+    assert calls[0]["suggestions_headers"] == {"X-Public-Client": "streamlit"}
+    assert calls[0]["suggestions_min_chars"] == 2
+    assert calls[0]["suggestions_debounce_ms"] == 450
+    assert calls[0]["suggestions_loading_message"] == "Searching..."
+    assert calls[0]["suggestions_error_message"] == "Search failed"
     assert calls[0]["key"] == "items"
 
 
@@ -106,6 +128,20 @@ def test_accepts_label_value_icon_options(monkeypatch):
         ({"label": "Items", "options": ["a"], "icon_size": "20"}, TypeError),
         ({"label": "Items", "options": ["a"], "options_max_height": True}, TypeError),
         ({"label": "Items", "options": ["a"], "options_max_height": "260"}, TypeError),
+        ({"label": "Items", "options": ["a"], "suggestions_api_url": 1}, TypeError),
+        ({"label": "Items", "options": ["a"], "suggestions_query_param": 1}, TypeError),
+        ({"label": "Items", "options": ["a"], "suggestions_response_path": 1}, TypeError),
+        ({"label": "Items", "options": ["a"], "suggestions_label_path": 1}, TypeError),
+        ({"label": "Items", "options": ["a"], "suggestions_value_path": 1}, TypeError),
+        ({"label": "Items", "options": ["a"], "suggestions_icon_url_path": 1}, TypeError),
+        ({"label": "Items", "options": ["a"], "suggestions_headers": "X-Test: yes"}, TypeError),
+        ({"label": "Items", "options": ["a"], "suggestions_headers": {1: "yes"}}, TypeError),
+        ({"label": "Items", "options": ["a"], "suggestions_headers": {"X-Test": 1}}, TypeError),
+        ({"label": "Items", "options": ["a"], "suggestions_min_chars": True}, TypeError),
+        ({"label": "Items", "options": ["a"], "suggestions_min_chars": 1.5}, TypeError),
+        ({"label": "Items", "options": ["a"], "suggestions_debounce_ms": True}, TypeError),
+        ({"label": "Items", "options": ["a"], "suggestions_loading_message": 1}, TypeError),
+        ({"label": "Items", "options": ["a"], "suggestions_error_message": 1}, TypeError),
         ({"label": "Items", "options": ["a"], "disabled": "no"}, TypeError),
         ({"label": "Items", "options": ["a"], "show_move_buttons": "yes"}, TypeError),
         ({"label": "Items", "options": ["a"], "show_numbers": "yes"}, TypeError),
@@ -123,6 +159,13 @@ def test_accepts_label_value_icon_options(monkeypatch):
         ({"label": "Items", "options": ["a"], "selected_position": "left"}, ValueError),
         ({"label": "Items", "options": ["a"], "icon_size": 0}, ValueError),
         ({"label": "Items", "options": ["a"], "options_max_height": 0}, ValueError),
+        ({"label": "Items", "options": ["a"], "suggestions_api_url": ""}, ValueError),
+        ({"label": "Items", "options": ["a"], "suggestions_query_param": ""}, ValueError),
+        ({"label": "Items", "options": ["a"], "suggestions_label_path": ""}, ValueError),
+        ({"label": "Items", "options": ["a"], "suggestions_value_path": ""}, ValueError),
+        ({"label": "Items", "options": ["a"], "suggestions_icon_url_path": ""}, ValueError),
+        ({"label": "Items", "options": ["a"], "suggestions_min_chars": -1}, ValueError),
+        ({"label": "Items", "options": ["a"], "suggestions_debounce_ms": -1}, ValueError),
         ({"label": "Items", "options": ["a", "b"], "default": ["a", "b"], "max_selections": 1}, ValueError),
     ],
 )
@@ -147,3 +190,14 @@ def test_allows_zero_max_selections(monkeypatch):
     assert calls[0]["selected_position"] == "bottom"
     assert calls[0]["icon_size"] == 20
     assert calls[0]["options_max_height"] == 190
+    assert calls[0]["suggestions_api_url"] is None
+    assert calls[0]["suggestions_query_param"] == "q"
+    assert calls[0]["suggestions_response_path"] == ""
+    assert calls[0]["suggestions_label_path"] == "label"
+    assert calls[0]["suggestions_value_path"] == "value"
+    assert calls[0]["suggestions_icon_url_path"] == "icon_url"
+    assert calls[0]["suggestions_headers"] == {}
+    assert calls[0]["suggestions_min_chars"] == 1
+    assert calls[0]["suggestions_debounce_ms"] == 300
+    assert calls[0]["suggestions_loading_message"] == "Loading suggestions..."
+    assert calls[0]["suggestions_error_message"] == "Failed to load suggestions"

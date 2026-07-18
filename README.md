@@ -8,6 +8,12 @@ A Streamlit custom component for searching, selecting, and reordering multiple s
 python -m pip install streamlit-sortable-multiselect
 ```
 
+Upgrade an existing installation:
+
+```bash
+python -m pip install --upgrade streamlit-sortable-multiselect
+```
+
 For local development:
 
 ```bash
@@ -76,6 +82,17 @@ st.write(selected)
 | `selected_position` | `str` | `"bottom"` | Position of the selected item list relative to the search/add input. Use `"bottom"` or `"top"`. |
 | `icon_size` | `int` | `20` | Icon display size in pixels for `icon_url` images. Images are displayed inside a square area while preserving their aspect ratio. |
 | `options_max_height` | `int` | `190` | Maximum height in pixels for the available options dropdown. |
+| `suggestions_api_url` | `str \| None` | `None` | Absolute HTTP(S) endpoint used to fetch suggestions in the browser. `None` disables API suggestions. |
+| `suggestions_query_param` | `str` | `"q"` | Query parameter name used to send the current search text. |
+| `suggestions_response_path` | `str` | `""` | Dot-separated path to the suggestions array in the JSON response. Empty means the response root. |
+| `suggestions_label_path` | `str` | `"label"` | Dot-separated path to each suggestion's display label. |
+| `suggestions_value_path` | `str` | `"value"` | Dot-separated path to each suggestion's returned value. |
+| `suggestions_icon_url_path` | `str \| None` | `"icon_url"` | Optional dot-separated path to each suggestion's icon URL. `None` disables API icons. |
+| `suggestions_headers` | `Mapping[str, str] \| None` | `None` | HTTP headers sent with suggestions requests. Header values are visible to browser users and must not contain secrets. |
+| `suggestions_min_chars` | `int` | `1` | Minimum trimmed query length before requesting suggestions. Use `0` to allow an empty query. |
+| `suggestions_debounce_ms` | `int` | `300` | Delay in milliseconds between the latest input and the API request. |
+| `suggestions_loading_message` | `str` | `"Loading suggestions..."` | Message shown while an API request is in progress. |
+| `suggestions_error_message` | `str` | `"Failed to load suggestions"` | Message shown when the request or response cannot be processed. |
 | `key` | `str \| None` | `None` | Optional Streamlit component key. Use this when rendering multiple sortable multiselects. |
 
 Option dictionaries use this shape:
@@ -85,6 +102,54 @@ Option dictionaries use this shape:
 ```
 
 `icon_url` may be omitted. The returned value is always the `value`, not the display `label`.
+
+## API Suggestions
+
+Set `suggestions_api_url` to request suggestions as the user types. Static `options` that match the query are shown first, followed by API results. Duplicate `value` entries prefer the static option.
+
+```python
+selected = sortable_multiselect(
+    "Repositories",
+    options=[{"label": "Streamlit", "value": "streamlit/streamlit"}],
+    suggestions_api_url="https://api.example.com/repositories",
+    suggestions_query_param="query",
+    suggestions_response_path="data.items",
+    suggestions_label_path="name",
+    suggestions_value_path="full_name",
+    suggestions_icon_url_path="owner.avatar_url",
+    suggestions_headers={"X-Public-Client": "streamlit-app"},
+    suggestions_min_chars=2,
+    suggestions_debounce_ms=300,
+    suggestions_loading_message="Searching repositories...",
+    suggestions_error_message="Repository search is unavailable",
+)
+```
+
+The example above accepts a response such as:
+
+```json
+{
+  "data": {
+    "items": [
+      {
+        "name": "streamlit-sortable-multiselect",
+        "full_name": "example/streamlit-sortable-multiselect",
+        "owner": {
+          "avatar_url": "https://example.com/avatar.png"
+        }
+      }
+    ]
+  }
+}
+```
+
+Requests are made directly from the component iframe, so the endpoint must allow browser requests with CORS. Values in `suggestions_headers` are exposed to browser users. Do not pass API secrets, private bearer tokens, or other credentials. Use a server-side proxy when authentication must remain private.
+
+The component sends a `GET` request after the trimmed input reaches
+`suggestions_min_chars` and remains unchanged for `suggestions_debounce_ms`.
+Changing the input cancels the previous in-flight request. Set `options=[]` to
+use only API results. Selected API values remain selected when a later query
+returns different suggestions.
 
 Build the frontend before packaging or using release mode:
 
@@ -97,7 +162,29 @@ Run the example app:
 
 ```bash
 streamlit run examples/basic.py
+streamlit run examples/api_suggestions.py
 ```
+
+`api_suggestions.py` starts a CORS-enabled sample API on a local random port, so
+it can be tried without a separate API process. This embedded server is intended
+for local development; use a separately deployed HTTPS API in remote deployments.
+The Streamlit page displays the address and port selected for the API. Test the
+endpoint from the same machine with:
+
+```bash
+curl "http://127.0.0.1:<displayed-port>/suggest?q=py"
+```
+
+Pass a fixed API port after `--` when needed:
+
+```bash
+streamlit run examples/api_suggestions.py -- --api-port 8765
+```
+
+The embedded API binds to `127.0.0.1`. Because suggestions are fetched by the
+browser, it works only when the browser and Streamlit run on the same machine.
+For Docker, another computer, or a hosted Streamlit app, configure
+`suggestions_api_url` with a browser-accessible HTTPS endpoint instead.
 
 ## Release
 

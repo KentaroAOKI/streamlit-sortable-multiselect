@@ -111,6 +111,48 @@ def _validate_options_max_height(options_max_height: int) -> int:
     return options_max_height
 
 
+def _validate_non_negative_int(name: str, value: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{name} must be an integer.")
+    if value < 0:
+        raise ValueError(f"{name} must be 0 or greater.")
+    return value
+
+
+def _validate_optional_non_empty_string(name: str, value: str | None) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError(f"{name} must be a string or None.")
+    if not value:
+        raise ValueError(f"{name} must not be empty.")
+    return value
+
+
+def _validate_non_empty_string(name: str, value: str) -> str:
+    if not isinstance(value, str):
+        raise TypeError(f"{name} must be a string.")
+    if not value:
+        raise ValueError(f"{name} must not be empty.")
+    return value
+
+
+def _normalize_suggestions_headers(
+    headers: Mapping[str, str] | None,
+) -> dict[str, str]:
+    if headers is None:
+        return {}
+    if not isinstance(headers, Mapping):
+        raise TypeError("suggestions_headers must be a mapping of strings to strings.")
+
+    result: dict[str, str] = {}
+    for name, value in headers.items():
+        if not isinstance(name, str) or not isinstance(value, str):
+            raise TypeError("suggestions_headers must contain only string keys and values.")
+        result[name] = value
+    return result
+
+
 def sortable_multiselect(
     label: str,
     options: Sequence[str | Mapping[str, Any]],
@@ -128,6 +170,17 @@ def sortable_multiselect(
     selected_position: str = "bottom",
     icon_size: int = 20,
     options_max_height: int = 190,
+    suggestions_api_url: str | None = None,
+    suggestions_query_param: str = "q",
+    suggestions_response_path: str = "",
+    suggestions_label_path: str = "label",
+    suggestions_value_path: str = "value",
+    suggestions_icon_url_path: str | None = "icon_url",
+    suggestions_headers: Mapping[str, str] | None = None,
+    suggestions_min_chars: int = 1,
+    suggestions_debounce_ms: int = 300,
+    suggestions_loading_message: str = "Loading suggestions...",
+    suggestions_error_message: str = "Failed to load suggestions",
     key: str | None = None,
 ) -> list[str]:
     """Select multiple string values and return them in user-defined order.
@@ -166,6 +219,28 @@ def sortable_multiselect(
         Icon display size in pixels. Images keep their aspect ratio within this square size.
     options_max_height:
         Maximum height in pixels for the available options dropdown.
+    suggestions_api_url:
+        Absolute HTTP(S) endpoint used to fetch suggestions. None disables API suggestions.
+    suggestions_query_param:
+        Query parameter name used to send the current search text.
+    suggestions_response_path:
+        Dot-separated path to the options array in the JSON response. Empty means the root.
+    suggestions_label_path:
+        Dot-separated path to each suggestion's display label.
+    suggestions_value_path:
+        Dot-separated path to each suggestion's returned value.
+    suggestions_icon_url_path:
+        Optional dot-separated path to each suggestion's icon URL.
+    suggestions_headers:
+        HTTP headers sent by the browser. Do not include secret credentials.
+    suggestions_min_chars:
+        Minimum query length before requesting suggestions.
+    suggestions_debounce_ms:
+        Delay in milliseconds between input and the suggestions request.
+    suggestions_loading_message:
+        Text shown while suggestions are loading.
+    suggestions_error_message:
+        Text shown when suggestions cannot be loaded.
     key:
         Optional Streamlit component key.
     """
@@ -199,6 +274,34 @@ def sortable_multiselect(
     max_selection_count = _validate_max_selections(max_selections)
     icon_size_value = _validate_icon_size(icon_size)
     options_max_height_value = _validate_options_max_height(options_max_height)
+    suggestions_api_url_value = _validate_optional_non_empty_string(
+        "suggestions_api_url", suggestions_api_url
+    )
+    suggestions_query_param_value = _validate_non_empty_string(
+        "suggestions_query_param", suggestions_query_param
+    )
+    if not isinstance(suggestions_response_path, str):
+        raise TypeError("suggestions_response_path must be a string.")
+    suggestions_label_path_value = _validate_non_empty_string(
+        "suggestions_label_path", suggestions_label_path
+    )
+    suggestions_value_path_value = _validate_non_empty_string(
+        "suggestions_value_path", suggestions_value_path
+    )
+    suggestions_icon_url_path_value = _validate_optional_non_empty_string(
+        "suggestions_icon_url_path", suggestions_icon_url_path
+    )
+    suggestions_headers_value = _normalize_suggestions_headers(suggestions_headers)
+    suggestions_min_chars_value = _validate_non_negative_int(
+        "suggestions_min_chars", suggestions_min_chars
+    )
+    suggestions_debounce_ms_value = _validate_non_negative_int(
+        "suggestions_debounce_ms", suggestions_debounce_ms
+    )
+    if not isinstance(suggestions_loading_message, str):
+        raise TypeError("suggestions_loading_message must be a string.")
+    if not isinstance(suggestions_error_message, str):
+        raise TypeError("suggestions_error_message must be a string.")
 
     # Set membership keeps these checks O(n); list.count / `in list` here are
     # O(n**2) and hang the rerun once options reaches tens of thousands.
@@ -247,6 +350,17 @@ def sortable_multiselect(
         selected_position=selected_position,
         icon_size=icon_size_value,
         options_max_height=options_max_height_value,
+        suggestions_api_url=suggestions_api_url_value,
+        suggestions_query_param=suggestions_query_param_value,
+        suggestions_response_path=suggestions_response_path,
+        suggestions_label_path=suggestions_label_path_value,
+        suggestions_value_path=suggestions_value_path_value,
+        suggestions_icon_url_path=suggestions_icon_url_path_value,
+        suggestions_headers=suggestions_headers_value,
+        suggestions_min_chars=suggestions_min_chars_value,
+        suggestions_debounce_ms=suggestions_debounce_ms_value,
+        suggestions_loading_message=suggestions_loading_message,
+        suggestions_error_message=suggestions_error_message,
         key=key,
         default=default_values,
     )

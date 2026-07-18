@@ -55,6 +55,17 @@ type Args = {
   selected_position?: "bottom" | "top";
   icon_size?: number;
   options_max_height?: number;
+  suggestions_api_url?: string | null;
+  suggestions_query_param?: string;
+  suggestions_response_path?: string;
+  suggestions_label_path?: string;
+  suggestions_value_path?: string;
+  suggestions_icon_url_path?: string | null;
+  suggestions_headers?: Record<string, string>;
+  suggestions_min_chars?: number;
+  suggestions_debounce_ms?: number;
+  suggestions_loading_message?: string;
+  suggestions_error_message?: string;
 };
 
 type SortableItemProps = {
@@ -81,6 +92,8 @@ type ItemStyle = {
   "--options-max-height"?: string;
 };
 
+type SuggestionsStatus = "idle" | "loading" | "success" | "error";
+
 function normalizeOptions(options: Array<string | OptionItem> | undefined): OptionItem[] {
   if (!Array.isArray(options)) {
     return [];
@@ -104,6 +117,58 @@ function normalizeOptions(options: Array<string | OptionItem> | undefined): Opti
 
     return [];
   });
+}
+
+function getValueAtPath(value: unknown, path: string): unknown {
+  if (!path) {
+    return value;
+  }
+
+  let current = value;
+  for (const segment of path.split(".")) {
+    if (!segment || current === null || typeof current !== "object") {
+      return undefined;
+    }
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
+}
+
+function normalizeSuggestions(
+  response: unknown,
+  responsePath: string,
+  labelPath: string,
+  valuePath: string,
+  iconUrlPath: string | null,
+): OptionItem[] {
+  const rawOptions = getValueAtPath(response, responsePath);
+  if (!Array.isArray(rawOptions)) {
+    throw new Error("Suggestions response path must point to an array.");
+  }
+
+  return rawOptions.flatMap((rawOption) => {
+    const label = getValueAtPath(rawOption, labelPath);
+    const value = getValueAtPath(rawOption, valuePath);
+    const iconUrl = iconUrlPath ? getValueAtPath(rawOption, iconUrlPath) : null;
+    if (
+      typeof label !== "string" ||
+      typeof value !== "string" ||
+      (iconUrl !== undefined && iconUrl !== null && typeof iconUrl !== "string")
+    ) {
+      return [];
+    }
+
+    return [{ label, value, icon_url: typeof iconUrl === "string" ? iconUrl : null }];
+  });
+}
+
+function buildSuggestionsUrl(apiUrl: string, queryParam: string, query: string): string {
+  const url = new URL(apiUrl);
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("Suggestions API URL must use HTTP or HTTPS.");
+  }
+  url.searchParams.set(queryParam, query);
+  return url.toString();
 }
 
 function normalizeSelection(
@@ -304,6 +369,35 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
     typeof componentArgs.options_max_height === "number" && componentArgs.options_max_height >= 1
       ? componentArgs.options_max_height
       : 190;
+  const suggestionsApiUrl = componentArgs.suggestions_api_url ?? null;
+  const suggestionsEnabled = Boolean(suggestionsApiUrl);
+  const suggestionsQueryParam = componentArgs.suggestions_query_param ?? "q";
+  const suggestionsResponsePath = componentArgs.suggestions_response_path ?? "";
+  const suggestionsLabelPath = componentArgs.suggestions_label_path ?? "label";
+  const suggestionsValuePath = componentArgs.suggestions_value_path ?? "value";
+  const suggestionsIconUrlPath =
+    componentArgs.suggestions_icon_url_path === undefined
+      ? "icon_url"
+      : componentArgs.suggestions_icon_url_path;
+  const suggestionsHeadersJson = JSON.stringify(componentArgs.suggestions_headers ?? {});
+  const suggestionsHeaders = useMemo(
+    () => JSON.parse(suggestionsHeadersJson) as Record<string, string>,
+    [suggestionsHeadersJson],
+  );
+  const suggestionsMinChars =
+    typeof componentArgs.suggestions_min_chars === "number" &&
+    componentArgs.suggestions_min_chars >= 0
+      ? componentArgs.suggestions_min_chars
+      : 1;
+  const suggestionsDebounceMs =
+    typeof componentArgs.suggestions_debounce_ms === "number" &&
+    componentArgs.suggestions_debounce_ms >= 0
+      ? componentArgs.suggestions_debounce_ms
+      : 300;
+  const suggestionsLoadingMessage =
+    componentArgs.suggestions_loading_message ?? "Loading suggestions...";
+  const suggestionsErrorMessage =
+    componentArgs.suggestions_error_message ?? "Failed to load suggestions";
   const disabled = Boolean(componentArgs.disabled || streamlitDisabled);
   const showMoveButtons = componentArgs.show_move_buttons ?? true;
   const showNumbers = componentArgs.show_numbers ?? false;
@@ -321,8 +415,14 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const [remoteOptions, setRemoteOptions] = useState<OptionItem[]>([]);
+  const [suggestionsStatus, setSuggestionsStatus] = useState<SuggestionsStatus>("idle");
+  const [selectedRemoteOptions, setSelectedRemoteOptions] = useState<Map<string, OptionItem>>(
+    () => new Map(),
+  );
   const searchInputRef = useRef<HTMLInputElement>(null);
   const optionsListRef = useRef<FixedSizeList>(null);
+  const suggestionsRequestIdRef = useRef(0);
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -332,10 +432,14 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
 
   useEffect(() => {
     setSelected((current) => {
-      const normalized = normalizeSelection(current, options, maxSelections);
+      const allowedOptions = [
+        ...options,
+        ...Array.from(selectedRemoteOptions.values()),
+      ];
+      const normalized = normalizeSelection(current, allowedOptions, maxSelections);
       return selectionsEqual(current, normalized) ? current : normalized;
     });
-  }, [options, maxSelections]);
+  }, [options, maxSelections, selectedRemoteOptions]);
 
   useEffect(() => {
     Streamlit.setComponentValue(selected);
@@ -355,7 +459,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
     [options],
   );
   const normalizedQuery = query.trim().toLowerCase();
-  const filteredOptions = useMemo(() => {
+  const filteredStaticOptions = useMemo(() => {
     const result: OptionItem[] = [];
     for (const entry of searchIndex) {
       if (selectedSet.has(entry.option.value)) {
@@ -368,6 +472,22 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
     }
     return result;
   }, [searchIndex, selectedSet, normalizedQuery]);
+  const filteredOptions = useMemo(() => {
+    const result = [...filteredStaticOptions];
+    const seenValues = new Set(result.map((option) => option.value));
+    for (const option of remoteOptions) {
+      if (selectedSet.has(option.value) || seenValues.has(option.value)) {
+        continue;
+      }
+      seenValues.add(option.value);
+      result.push(option);
+    }
+    return result;
+  }, [filteredStaticOptions, remoteOptions, selectedSet]);
+  const candidateByValue = useMemo(
+    () => new Map(filteredOptions.map((option) => [option.value, option])),
+    [filteredOptions],
+  );
   const availableCount = useMemo(
     () =>
       searchIndex.reduce(
@@ -376,8 +496,86 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
       ),
     [searchIndex, selectedSet],
   );
-  const hasOptions = availableCount > 0;
+  const hasStaticOptions = availableCount > 0;
+  const apiQueryEligible =
+    suggestionsEnabled && query.trim().length >= suggestionsMinChars;
+  const hasOptions = filteredOptions.length > 0;
+  const canSearch = canAddOptions && (suggestionsEnabled || hasStaticOptions);
+  const showOptionsPopover =
+    isOpen &&
+    canAddOptions &&
+    (hasOptions || apiQueryEligible);
   const activeOption = filteredOptions[highlightedIndex] ?? filteredOptions[0];
+
+  useEffect(() => {
+    const requestId = ++suggestionsRequestIdRef.current;
+    const controller = new AbortController();
+    let timeoutId: number | undefined;
+
+    if (!suggestionsEnabled || !suggestionsApiUrl || !apiQueryEligible) {
+      setRemoteOptions([]);
+      setSuggestionsStatus("idle");
+      return () => controller.abort();
+    }
+
+    setRemoteOptions([]);
+    setSuggestionsStatus("loading");
+    timeoutId = window.setTimeout(async () => {
+      try {
+        const requestUrl = buildSuggestionsUrl(
+          suggestionsApiUrl,
+          suggestionsQueryParam,
+          query.trim(),
+        );
+        const response = await fetch(requestUrl, {
+          method: "GET",
+          headers: suggestionsHeaders,
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          throw new Error(`Suggestions request failed with status ${response.status}.`);
+        }
+        const responseBody: unknown = await response.json();
+        const nextOptions = normalizeSuggestions(
+          responseBody,
+          suggestionsResponsePath,
+          suggestionsLabelPath,
+          suggestionsValuePath,
+          suggestionsIconUrlPath,
+        );
+        if (suggestionsRequestIdRef.current !== requestId) {
+          return;
+        }
+        setRemoteOptions(nextOptions);
+        setSuggestionsStatus("success");
+      } catch (error) {
+        if (controller.signal.aborted || suggestionsRequestIdRef.current !== requestId) {
+          return;
+        }
+        setRemoteOptions([]);
+        setSuggestionsStatus("error");
+      }
+    }, suggestionsDebounceMs);
+
+    return () => {
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
+      controller.abort();
+    };
+  }, [
+    apiQueryEligible,
+    query,
+    suggestionsApiUrl,
+    suggestionsDebounceMs,
+    suggestionsEnabled,
+    suggestionsHeaders,
+    suggestionsIconUrlPath,
+    suggestionsLabelPath,
+    suggestionsQueryParam,
+    suggestionsResponsePath,
+    suggestionsValuePath,
+  ]);
 
   useEffect(() => {
     setHighlightedIndex(0);
@@ -396,14 +594,23 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
   }, [highlightedIndex, isOpen, canAddOptions]);
 
   function addValue(value: string) {
-    if (!value || !canAddOptions || selectedSet.has(value) || !optionByValue.has(value)) {
+    if (!value || !canAddOptions || selectedSet.has(value) || !candidateByValue.has(value)) {
       return;
+    }
+    const selectedOption = candidateByValue.get(value);
+    if (selectedOption && !optionByValue.has(value)) {
+      setSelectedRemoteOptions((current) => {
+        const next = new Map(current);
+        next.set(value, selectedOption);
+        return next;
+      });
     }
     setSelected((current) => [...current, value]);
     setQuery("");
     const nextSelectionCount = selected.length + 1;
     setIsOpen(
-      nextSelectionCount < options.length && nextSelectionCount < (maxSelections ?? Infinity),
+      nextSelectionCount < (maxSelections ?? Infinity) &&
+        (suggestionsEnabled || nextSelectionCount < options.length),
     );
     window.setTimeout(() => {
       searchInputRef.current?.focus();
@@ -415,6 +622,14 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
       return;
     }
     setSelected((current) => current.filter((item) => item !== value));
+    setSelectedRemoteOptions((current) => {
+      if (!current.has(value)) {
+        return current;
+      }
+      const next = new Map(current);
+      next.delete(value);
+      return next;
+    });
   }
 
   function moveValue(fromIndex: number, toIndex: number) {
@@ -481,7 +696,10 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
       <SortableContext items={selected} strategy={verticalListSortingStrategy}>
         <ul className="selected-list" aria-label="Selected items">
           {selected.map((item, index) => {
-            const option = optionByValue.get(item) ?? { label: item, value: item, icon_url: null };
+            const option =
+              optionByValue.get(item) ??
+              selectedRemoteOptions.get(item) ??
+              { label: item, value: item, icon_url: null };
             return (
               <SortableItem
                 key={item}
@@ -524,17 +742,21 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
           type="text"
           role="combobox"
           aria-autocomplete="list"
-          aria-expanded={isOpen && canAddOptions && hasOptions}
-          aria-controls="sortable-multiselect-options"
+          aria-expanded={showOptionsPopover}
+          aria-controls={showOptionsPopover ? "sortable-multiselect-options" : undefined}
           aria-activedescendant={
-            isOpen && canAddOptions && activeOption
+            showOptionsPopover && activeOption
               ? `sortable-multiselect-option-${highlightedIndex}`
               : undefined
           }
           aria-label={label ? `Search and add item to ${label}` : "Search and add item"}
-          disabled={disabled || selectionLimitReached || !hasOptions}
+          disabled={!canSearch}
           placeholder={
-            selectionLimitReached ? maxSelectionsPlaceholder : hasOptions ? placeholder : noOptionsPlaceholder
+            selectionLimitReached
+              ? maxSelectionsPlaceholder
+              : suggestionsEnabled || hasStaticOptions
+                ? placeholder
+                : noOptionsPlaceholder
           }
           value={query}
           onChange={(event) => {
@@ -545,8 +767,18 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
           onBlur={() => setIsOpen(false)}
           onKeyDown={onSearchKeyDown}
         />
-        {isOpen && canAddOptions && hasOptions ? (
+        {showOptionsPopover ? (
           <div className="options-popover">
+            {suggestionsStatus === "loading" && hasOptions ? (
+              <div className="option-status" role="status">
+                {suggestionsLoadingMessage}
+              </div>
+            ) : null}
+            {suggestionsStatus === "error" && hasOptions ? (
+              <div className="option-status option-error" role="alert">
+                {suggestionsErrorMessage}
+              </div>
+            ) : null}
             {filteredOptions.length === 0 ? (
               <ul
                 id="sortable-multiselect-options"
@@ -554,7 +786,17 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
                 role="listbox"
                 aria-label="Available options"
               >
-                <li className="option-empty">No matching options</li>
+                {suggestionsStatus === "loading" ? (
+                  <li className="option-empty" role="status">
+                    {suggestionsLoadingMessage}
+                  </li>
+                ) : suggestionsStatus === "error" ? (
+                  <li className="option-empty option-error" role="alert">
+                    {suggestionsErrorMessage}
+                  </li>
+                ) : (
+                  <li className="option-empty">No matching options</li>
+                )}
               </ul>
             ) : (
               <FixedSizeList
