@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Streamlit } from "streamlit-component-lib";
 import { SortableMultiselect } from "./App";
 
@@ -38,6 +38,10 @@ function renderComponent(args = {}) {
 describe("SortableMultiselect", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("renders default selection and adds an item", async () => {
@@ -124,6 +128,319 @@ describe("SortableMultiselect", () => {
     expect(screen.getByRole("option", { name: "Gamma" })).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "Alpha" })).not.toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "Beta" })).not.toBeInTheDocument();
+  });
+
+  it("fetches mapped API suggestions and merges them after static options", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({
+        data: {
+          items: [
+            {
+              id: "python",
+              name: "Remote Python",
+              image: { url: "https://example.com/remote-python.png" },
+            },
+            {
+              id: "pypi",
+              name: "PyPI",
+              image: { url: "https://example.com/pypi.png" },
+            },
+          ],
+        },
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = renderComponent({
+      options: [{ label: "Python", value: "python" }],
+      default_selected: [],
+      suggestions_api_url: "https://api.example.com/suggest?lang=en",
+      suggestions_query_param: "term",
+      suggestions_response_path: "data.items",
+      suggestions_label_path: "name",
+      suggestions_value_path: "id",
+      suggestions_icon_url_path: "image.url",
+      suggestions_headers: { "X-Public-Client": "streamlit" },
+      suggestions_debounce_ms: 0,
+    });
+
+    fireEvent.change(screen.getByLabelText("Search and add item to Items"), {
+      target: { value: "py" },
+    });
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.com/suggest?lang=en&term=py",
+      expect.objectContaining({
+        method: "GET",
+        headers: { "X-Public-Client": "streamlit" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+
+    const optionLabels = await screen.findAllByRole("option");
+    expect(optionLabels.map((option) => option.textContent)).toEqual(["Python", "PyPI"]);
+    expect(container.querySelector(".option-icon")).toHaveAttribute(
+      "src",
+      "https://example.com/pypi.png",
+    );
+  });
+
+  it("keeps API-only search enabled and debounces to the latest query", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue([]),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderComponent({
+      options: [],
+      default_selected: [],
+      suggestions_api_url: "https://api.example.com/suggest",
+      suggestions_min_chars: 1,
+      suggestions_debounce_ms: 30,
+    });
+
+    const input = screen.getByLabelText("Search and add item to Items");
+    expect(input).not.toBeDisabled();
+
+    fireEvent.change(input, { target: { value: "p" } });
+    fireEvent.change(input, { target: { value: "py" } });
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/suggest?q=py");
+  });
+
+  it("does not refetch when Streamlit resends equivalent headers", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue([
+        { label: "Python", value: "python" },
+        { label: "PHP", value: "php" },
+      ]),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const args = {
+      label: "Items",
+      options: [],
+      default_selected: [],
+      suggestions_api_url: "https://api.example.com/suggest",
+      suggestions_headers: {
+        "X-Public-Client": "streamlit",
+        "X-Request-Source": "test",
+      },
+      suggestions_debounce_ms: 0,
+    };
+    const { rerender } = render(
+      <SortableMultiselect
+        args={args}
+        disabled={false}
+        theme={undefined}
+        width={640}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Search and add item to Items"), {
+      target: { value: "p" },
+    });
+    await screen.findByRole("option", { name: "Python" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <SortableMultiselect
+        args={{
+          ...args,
+          suggestions_headers: {
+            "X-Request-Source": "test",
+            "X-Public-Client": "streamlit",
+          },
+        }}
+        disabled={false}
+        theme={undefined}
+        width={640}
+      />,
+    );
+
+    await new Promise((resolve) => window.setTimeout(resolve, 10));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for the configured minimum query length", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue([]),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderComponent({
+      options: [],
+      default_selected: [],
+      suggestions_api_url: "https://api.example.com/suggest",
+      suggestions_min_chars: 2,
+      suggestions_debounce_ms: 0,
+    });
+
+    const input = screen.getByLabelText("Search and add item to Items");
+    fireEvent.change(input, { target: { value: "p" } });
+    await new Promise((resolve) => window.setTimeout(resolve, 10));
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fireEvent.change(input, { target: { value: "py" } });
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("shows a custom API error while keeping static options available", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error("Network unavailable"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderComponent({
+      options: ["Alpha", "Beta"],
+      default_selected: [],
+      suggestions_api_url: "https://api.example.com/suggest",
+      suggestions_debounce_ms: 0,
+      suggestions_error_message: "Suggestions are unavailable",
+    });
+
+    fireEvent.change(screen.getByLabelText("Search and add item to Items"), {
+      target: { value: "alp" },
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Suggestions are unavailable");
+    expect(screen.getByRole("option", { name: "Alpha" })).toBeInTheDocument();
+  });
+
+  it("shows a custom loading message while the API request is pending", async () => {
+    const fetchMock = vi.fn().mockReturnValue(new Promise(() => undefined));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderComponent({
+      options: [],
+      default_selected: [],
+      suggestions_api_url: "https://api.example.com/suggest",
+      suggestions_debounce_ms: 0,
+      suggestions_loading_message: "Searching the API...",
+    });
+
+    fireEvent.change(screen.getByLabelText("Search and add item to Items"), {
+      target: { value: "py" },
+    });
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Searching the API...");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox")).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("combobox")).not.toHaveAttribute("aria-controls");
+  });
+
+  it("keeps a selected API option when later search results replace it", async () => {
+    const fetchMock = vi.fn().mockImplementation(async (requestUrl: string) => {
+      const query = new URL(requestUrl).searchParams.get("q");
+      return {
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue(
+          query === "py"
+            ? [{ label: "Python", value: "python", icon_url: "https://example.com/python.png" }]
+            : [{ label: "Rust", value: "rust", icon_url: "https://example.com/rust.png" }],
+        ),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderComponent({
+      options: [],
+      default_selected: [],
+      suggestions_api_url: "https://api.example.com/suggest",
+      suggestions_debounce_ms: 0,
+    });
+
+    const input = screen.getByLabelText("Search and add item to Items");
+    fireEvent.change(input, { target: { value: "py" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Python" }));
+
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["python"]);
+    });
+
+    fireEvent.change(input, { target: { value: "ru" } });
+    expect(await screen.findByRole("option", { name: "Rust" })).toBeInTheDocument();
+
+    const selectedItems = screen.getByRole("list", { name: "Selected items" });
+    expect(within(selectedItems).getByText("Python")).toBeInTheDocument();
+    expect(selectedItems.querySelector(".item-icon")).toHaveAttribute(
+      "src",
+      "https://example.com/python.png",
+    );
+  });
+
+  it("aborts an in-flight request when the query changes", async () => {
+    const fetchMock = vi.fn().mockImplementation((requestUrl: string) => {
+      const query = new URL(requestUrl).searchParams.get("q");
+      if (query === "p") {
+        return new Promise(() => undefined);
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue([]),
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderComponent({
+      options: [],
+      default_selected: [],
+      suggestions_api_url: "https://api.example.com/suggest",
+      suggestions_debounce_ms: 0,
+    });
+
+    const input = screen.getByLabelText("Search and add item to Items");
+    fireEvent.change(input, { target: { value: "p" } });
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+    const firstSignal = fetchMock.mock.calls[0][1].signal as AbortSignal;
+
+    fireEvent.change(input, { target: { value: "py" } });
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+    expect(firstSignal.aborted).toBe(true);
+  });
+
+  it("shows the API error message for an invalid response path", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({ data: { items: "not-an-array" } }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderComponent({
+      options: [],
+      default_selected: [],
+      suggestions_api_url: "https://api.example.com/suggest",
+      suggestions_response_path: "data.items",
+      suggestions_debounce_ms: 0,
+      suggestions_error_message: "Invalid suggestions response",
+    });
+
+    fireEvent.change(screen.getByLabelText("Search and add item to Items"), {
+      target: { value: "py" },
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Invalid suggestions response");
   });
 
   it("supports label value options and returns selected values", async () => {
