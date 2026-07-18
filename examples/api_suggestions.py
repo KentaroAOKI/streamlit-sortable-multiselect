@@ -58,9 +58,14 @@ def parse_args() -> argparse.Namespace:
 
 class SuggestionsHandler(BaseHTTPRequestHandler):
     def _send_cors_headers(self) -> None:
+        requested_headers = self.headers.get("Access-Control-Request-Headers")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header(
+            "Access-Control-Allow-Headers",
+            requested_headers or "Content-Type",
+        )
+        self.send_header("Vary", "Access-Control-Request-Headers")
 
     def _send_json(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload).encode("utf-8")

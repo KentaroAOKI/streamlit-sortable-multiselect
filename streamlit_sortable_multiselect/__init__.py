@@ -5,10 +5,11 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence, cast
+from urllib.parse import urlparse
 
 import streamlit.components.v1 as components
 
-__version__ = "0.7.4"
+__version__ = "0.7.5"
 __all__ = ["sortable_multiselect"]
 
 _COMPONENT_NAME = "streamlit_sortable_multiselect"
@@ -135,6 +136,17 @@ def _validate_non_empty_string(name: str, value: str) -> str:
     if not value:
         raise ValueError(f"{name} must not be empty.")
     return value
+
+
+def _validate_suggestions_api_url(value: str | None) -> str | None:
+    validated = _validate_optional_non_empty_string("suggestions_api_url", value)
+    if validated is None:
+        return None
+
+    parsed = urlparse(validated)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("suggestions_api_url must be an absolute HTTP(S) URL.")
+    return validated
 
 
 def _normalize_suggestions_headers(
@@ -274,9 +286,7 @@ def sortable_multiselect(
     max_selection_count = _validate_max_selections(max_selections)
     icon_size_value = _validate_icon_size(icon_size)
     options_max_height_value = _validate_options_max_height(options_max_height)
-    suggestions_api_url_value = _validate_optional_non_empty_string(
-        "suggestions_api_url", suggestions_api_url
-    )
+    suggestions_api_url_value = _validate_suggestions_api_url(suggestions_api_url)
     suggestions_query_param_value = _validate_non_empty_string(
         "suggestions_query_param", suggestions_query_param
     )

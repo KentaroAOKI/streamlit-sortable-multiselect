@@ -5,6 +5,10 @@ import pytest
 import streamlit_sortable_multiselect as sms
 
 
+def test_version_matches_package_metadata():
+    assert sms.__version__ == "0.7.5"
+
+
 def test_returns_default_when_component_has_no_value(monkeypatch):
     calls = []
 
@@ -160,6 +164,12 @@ def test_accepts_label_value_icon_options(monkeypatch):
         ({"label": "Items", "options": ["a"], "icon_size": 0}, ValueError),
         ({"label": "Items", "options": ["a"], "options_max_height": 0}, ValueError),
         ({"label": "Items", "options": ["a"], "suggestions_api_url": ""}, ValueError),
+        ({"label": "Items", "options": ["a"], "suggestions_api_url": "/suggest"}, ValueError),
+        (
+            {"label": "Items", "options": ["a"], "suggestions_api_url": "ftp://example.com"},
+            ValueError,
+        ),
+        ({"label": "Items", "options": ["a"], "suggestions_api_url": "https:///suggest"}, ValueError),
         ({"label": "Items", "options": ["a"], "suggestions_query_param": ""}, ValueError),
         ({"label": "Items", "options": ["a"], "suggestions_label_path": ""}, ValueError),
         ({"label": "Items", "options": ["a"], "suggestions_value_path": ""}, ValueError),

@@ -510,6 +510,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
     isOpen &&
     canAddOptions &&
     (hasOptions || apiQueryEligible);
+  const showOptionsList = showOptionsPopover && hasOptions;
   const activeOption = filteredOptions[highlightedIndex] ?? filteredOptions[0];
 
   useEffect(() => {
@@ -747,10 +748,10 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
           type="text"
           role="combobox"
           aria-autocomplete="list"
-          aria-expanded={showOptionsPopover}
-          aria-controls={showOptionsPopover ? "sortable-multiselect-options" : undefined}
+          aria-expanded={showOptionsList}
+          aria-controls={showOptionsList ? "sortable-multiselect-options" : undefined}
           aria-activedescendant={
-            showOptionsPopover && activeOption
+            showOptionsList && activeOption
               ? `sortable-multiselect-option-${highlightedIndex}`
               : undefined
           }
@@ -774,35 +775,20 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
         />
         {showOptionsPopover ? (
           <div className="options-popover">
-            {suggestionsStatus === "loading" && hasOptions ? (
+            {suggestionsStatus === "loading" ? (
               <div className="option-status" role="status">
                 {suggestionsLoadingMessage}
               </div>
             ) : null}
-            {suggestionsStatus === "error" && hasOptions ? (
+            {suggestionsStatus === "error" ? (
               <div className="option-status option-error" role="alert">
                 {suggestionsErrorMessage}
               </div>
             ) : null}
             {filteredOptions.length === 0 ? (
-              <ul
-                id="sortable-multiselect-options"
-                className="options-scroll"
-                role="listbox"
-                aria-label="Available options"
-              >
-                {suggestionsStatus === "loading" ? (
-                  <li className="option-empty" role="status">
-                    {suggestionsLoadingMessage}
-                  </li>
-                ) : suggestionsStatus === "error" ? (
-                  <li className="option-empty option-error" role="alert">
-                    {suggestionsErrorMessage}
-                  </li>
-                ) : (
-                  <li className="option-empty">No matching options</li>
-                )}
-              </ul>
+              suggestionsStatus === "idle" || suggestionsStatus === "success" ? (
+                <div className="option-empty">No matching options</div>
+              ) : null
             ) : (
               <FixedSizeList
                 ref={optionsListRef}

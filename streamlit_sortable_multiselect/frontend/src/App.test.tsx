@@ -234,7 +234,10 @@ describe("SortableMultiselect", () => {
       options: [],
       default_selected: [],
       suggestions_api_url: "https://api.example.com/suggest",
-      suggestions_headers: { "X-Public-Client": "streamlit" },
+      suggestions_headers: {
+        "X-Public-Client": "streamlit",
+        "X-Request-Source": "test",
+      },
       suggestions_debounce_ms: 0,
     };
     const { rerender } = render(
@@ -254,7 +257,13 @@ describe("SortableMultiselect", () => {
 
     rerender(
       <SortableMultiselect
-        args={{ ...args, suggestions_headers: { "X-Public-Client": "streamlit" } }}
+        args={{
+          ...args,
+          suggestions_headers: {
+            "X-Request-Source": "test",
+            "X-Public-Client": "streamlit",
+          },
+        }}
         disabled={false}
         theme={undefined}
         width={640}
@@ -329,6 +338,9 @@ describe("SortableMultiselect", () => {
     });
 
     expect(await screen.findByRole("status")).toHaveTextContent("Searching the API...");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox")).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("combobox")).not.toHaveAttribute("aria-controls");
   });
 
   it("keeps a selected API option when later search results replace it", async () => {
