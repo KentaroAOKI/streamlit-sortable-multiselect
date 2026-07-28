@@ -35,6 +35,20 @@ function renderComponent(args = {}) {
   );
 }
 
+// jsdom reports every box as 0x0, so clipping has to be stubbed to be observable.
+function stubClippedText(scrollWidth: number, clientWidth: number) {
+  const scrollWidthSpy = vi
+    .spyOn(HTMLElement.prototype, "scrollWidth", "get")
+    .mockReturnValue(scrollWidth);
+  const clientWidthSpy = vi
+    .spyOn(HTMLElement.prototype, "clientWidth", "get")
+    .mockReturnValue(clientWidth);
+  return () => {
+    scrollWidthSpy.mockRestore();
+    clientWidthSpy.mockRestore();
+  };
+}
+
 describe("SortableMultiselect", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -669,6 +683,206 @@ describe("SortableMultiselect", () => {
     expect(rows[0]).toHaveStyle({ "--item-bg": "#fee2e2" });
     expect(rows[1]).toHaveTextContent("Alpha");
     expect(rows[1]).toHaveStyle({ "--item-bg": "#dcfce7" });
+  });
+
+  it("applies value colors that follow an item as it moves", async () => {
+    renderComponent({
+      default_selected: ["Alpha", "Beta"],
+      base_color: "#eef2ff",
+      value_colors: { Alpha: "#fee2e2" },
+    });
+
+    let rows = screen.getAllByRole("listitem");
+    expect(rows[0]).toHaveStyle({ "--item-bg": "#fee2e2" });
+    expect(rows[1]).toHaveStyle({ "--item-bg": "#eef2ff" });
+
+    fireEvent.click(screen.getByLabelText("Move Alpha down"));
+
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["Beta", "Alpha"]);
+    });
+
+    rows = screen.getAllByRole("listitem");
+    expect(rows[0]).toHaveTextContent("Beta");
+    expect(rows[0]).toHaveStyle({ "--item-bg": "#eef2ff" });
+    expect(rows[1]).toHaveTextContent("Alpha");
+    expect(rows[1]).toHaveStyle({ "--item-bg": "#fee2e2" });
+  });
+
+  it("applies colors carried by an option", () => {
+    renderComponent({
+      options: [
+        { label: "Alpha", value: "Alpha", color: "#fee2e2" },
+        { label: "Beta", value: "Beta" },
+      ],
+      default_selected: ["Alpha", "Beta"],
+      base_color: "#eef2ff",
+    });
+
+    const rows = screen.getAllByRole("listitem");
+    expect(rows[0]).toHaveStyle({ "--item-bg": "#fee2e2" });
+    expect(rows[1]).toHaveStyle({ "--item-bg": "#eef2ff" });
+  });
+
+  it("previews an option color in the options list", () => {
+    renderComponent({
+      options: [
+        { label: "Alpha", value: "Alpha", color: "#fee2e2" },
+        { label: "Beta", value: "Beta" },
+      ],
+      default_selected: [],
+    });
+
+    fireEvent.focus(screen.getByLabelText("Search and add item to Items"));
+
+    const alpha = screen.getByRole("option", { name: "Alpha" });
+    const beta = screen.getByRole("option", { name: "Beta" });
+    expect(alpha.querySelector(".option-swatch")).toHaveStyle({ background: "#fee2e2" });
+    expect(beta.querySelector(".option-swatch")).toBeNull();
+  });
+
+  it("cycles a color palette across selected positions", () => {
+    renderComponent({
+      default_selected: ["Alpha", "Beta", "Gamma"],
+      color_palette: ["#fee2e2", "#dcfce7"],
+    });
+
+    const rows = screen.getAllByRole("listitem");
+    expect(rows[0]).toHaveStyle({ "--item-bg": "#fee2e2" });
+    expect(rows[1]).toHaveStyle({ "--item-bg": "#dcfce7" });
+    expect(rows[2]).toHaveStyle({ "--item-bg": "#fee2e2" });
+  });
+
+  it("counts negative order color positions from the last item", () => {
+    renderComponent({
+      default_selected: ["Alpha", "Beta", "Gamma"],
+      base_color: "#eef2ff",
+      order_colors: { "-1": "#fee2e2" },
+    });
+
+    const rows = screen.getAllByRole("listitem");
+    expect(rows[0]).toHaveStyle({ "--item-bg": "#eef2ff" });
+    expect(rows[1]).toHaveStyle({ "--item-bg": "#eef2ff" });
+    expect(rows[2]).toHaveStyle({ "--item-bg": "#fee2e2" });
+  });
+
+  it("applies text and border colors from a color mapping", () => {
+    renderComponent({
+      default_selected: ["Alpha"],
+      base_color: { background: "#111827", text: "#facc15", border: "#f74c00" },
+    });
+
+    const rows = screen.getAllByRole("listitem");
+    expect(rows[0]).toHaveStyle({
+      "--item-bg": "#111827",
+      "--item-fg": "#facc15",
+      "--item-muted-fg": "#facc15",
+      "--item-border": "#f74c00",
+    });
+  });
+
+  it("fills unset color fields from lower priority sources", () => {
+    renderComponent({
+      default_selected: ["Alpha"],
+      base_color: "#eef2ff",
+      value_colors: { Alpha: { text: "#7f1d1d" } },
+    });
+
+    const rows = screen.getAllByRole("listitem");
+    expect(rows[0]).toHaveStyle({ "--item-bg": "#eef2ff", "--item-fg": "#7f1d1d" });
+  });
+
+  it("ranks color sources with color_priority", () => {
+    const args = {
+      default_selected: ["Alpha"],
+      value_colors: { Alpha: "#fee2e2" },
+      order_colors: { "1": "#dcfce7" },
+    };
+
+    const { unmount } = renderComponent(args);
+    expect(screen.getAllByRole("listitem")[0]).toHaveStyle({ "--item-bg": "#fee2e2" });
+    unmount();
+
+    renderComponent({ ...args, color_priority: ["order"] });
+    expect(screen.getAllByRole("listitem")[0]).toHaveStyle({ "--item-bg": "#dcfce7" });
+  });
+
+  it("reads suggestion colors from the configured path", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{ label: "Delta", value: "delta", theme: { color: "#fee2e2" } }],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderComponent({
+      options: [],
+      default_selected: [],
+      suggestions_api_url: "https://example.com/suggest",
+      suggestions_color_path: "theme.color",
+      suggestions_debounce_ms: 0,
+    });
+
+    const input = screen.getByLabelText("Search and add item to Items");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "de" } });
+
+    const option = await screen.findByRole("option", { name: "Delta" });
+    expect(option.querySelector(".option-swatch")).toHaveStyle({ background: "#fee2e2" });
+
+    fireEvent.click(option);
+
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["delta"]);
+    });
+
+    expect(screen.getAllByRole("listitem")[0]).toHaveStyle({ "--item-bg": "#fee2e2" });
+  });
+
+  it("shows a tooltip when a clipped option label is hovered", () => {
+    const longLabel = "An option label that is far too long for the dropdown";
+    const restore = stubClippedText(320, 120);
+
+    try {
+      renderComponent({ options: [longLabel], default_selected: [] });
+      fireEvent.focus(screen.getByLabelText("Search and add item to Items"));
+
+      const label = screen.getByText(longLabel);
+      expect(label).not.toHaveAttribute("title");
+
+      fireEvent.mouseEnter(label);
+      expect(label).toHaveAttribute("title", longLabel);
+    } finally {
+      restore();
+    }
+  });
+
+  it("shows a tooltip when a clipped selected item label is hovered", () => {
+    const longLabel = "A selected item label that is far too long for its row";
+    const restore = stubClippedText(320, 120);
+
+    try {
+      renderComponent({ options: [longLabel], default_selected: [longLabel] });
+
+      const label = screen.getByText(longLabel);
+      fireEvent.mouseEnter(label);
+      expect(label).toHaveAttribute("title", longLabel);
+    } finally {
+      restore();
+    }
+  });
+
+  it("leaves a label that fits without a tooltip", () => {
+    const restore = stubClippedText(120, 120);
+
+    try {
+      renderComponent({ default_selected: ["Alpha"] });
+
+      const label = screen.getByText("Alpha");
+      fireEvent.mouseEnter(label);
+      expect(label).not.toHaveAttribute("title");
+    } finally {
+      restore();
+    }
   });
 
   it("removes selected items", async () => {

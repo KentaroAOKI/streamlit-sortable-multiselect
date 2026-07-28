@@ -32,10 +32,22 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import "./style.css";
 
+// Styleable parts of a selected item. Keep in sync with COLOR_FIELDS in the wrapper.
+const COLOR_FIELDS = ["background", "text", "border"] as const;
+
+// Color sources, in default precedence order. Keep in sync with COLOR_SOURCES.
+const COLOR_SOURCES = ["value", "option", "order", "palette", "base"] as const;
+
+type ColorField = (typeof COLOR_FIELDS)[number];
+type ColorSource = (typeof COLOR_SOURCES)[number];
+type ColorSpec = Partial<Record<ColorField, string>>;
+type ColorValue = string | Record<string, unknown> | null;
+
 type OptionItem = {
   label: string;
   value: string;
   icon_url?: string | null;
+  color?: ColorSpec;
 };
 
 type Args = {
@@ -46,8 +58,11 @@ type Args = {
   disabled?: boolean;
   show_move_buttons?: boolean;
   show_numbers?: boolean;
-  base_color?: string | null;
-  order_colors?: Record<string, string>;
+  base_color?: ColorValue;
+  order_colors?: Record<string, ColorValue>;
+  value_colors?: Record<string, ColorValue>;
+  color_palette?: ColorValue[];
+  color_priority?: string[];
   max_selections?: number | null;
   max_selections_placeholder?: string;
   empty_message?: string;
@@ -61,6 +76,7 @@ type Args = {
   suggestions_label_path?: string;
   suggestions_value_path?: string;
   suggestions_icon_url_path?: string | null;
+  suggestions_color_path?: string | null;
   suggestions_headers?: Record<string, string>;
   suggestions_min_chars?: number;
   suggestions_debounce_ms?: number;
@@ -77,7 +93,7 @@ type SortableItemProps = {
   disabled: boolean;
   showMoveButtons: boolean;
   showNumber: boolean;
-  itemColor?: string;
+  colors: ColorSpec;
   onRemove: (value: string) => void;
   onMove: (fromIndex: number, toIndex: number) => void;
 };
@@ -88,18 +104,133 @@ type ItemStyle = {
   "--item-bg"?: string;
   "--item-fg"?: string;
   "--item-muted-fg"?: string;
+  "--item-border"?: string;
   "--icon-size"?: string;
   "--options-max-height"?: string;
 };
 
 type SuggestionsStatus = "idle" | "loading" | "success" | "error";
 
+function toColorSpec(color: unknown): ColorSpec | undefined {
+  if (typeof color === "string") {
+    return color ? { background: color } : undefined;
+  }
+  if (!color || typeof color !== "object") {
+    return undefined;
+  }
+
+  const fields = color as Record<string, unknown>;
+  const spec: ColorSpec = {};
+  for (const field of COLOR_FIELDS) {
+    const fieldValue = fields[field];
+    if (typeof fieldValue === "string" && fieldValue) {
+      spec[field] = fieldValue;
+    }
+  }
+  return Object.keys(spec).length > 0 ? spec : undefined;
+}
+
+function toColorSpecRecord(colors: Record<string, ColorValue> | undefined): Record<string, ColorSpec> {
+  const result: Record<string, ColorSpec> = {};
+  for (const [key, color] of Object.entries(colors ?? {})) {
+    const spec = toColorSpec(color);
+    if (spec) {
+      result[key] = spec;
+    }
+  }
+  return result;
+}
+
+function toColorSpecList(colors: ColorValue[] | undefined): ColorSpec[] {
+  if (!Array.isArray(colors)) {
+    return [];
+  }
+  return colors.flatMap((color) => {
+    const spec = toColorSpec(color);
+    return spec ? [spec] : [];
+  });
+}
+
+function normalizeColorPriority(priority: string[] | undefined): ColorSource[] {
+  const ranked: ColorSource[] = [];
+  if (Array.isArray(priority)) {
+    for (const source of priority) {
+      if (COLOR_SOURCES.includes(source as ColorSource) && !ranked.includes(source as ColorSource)) {
+        ranked.push(source as ColorSource);
+      }
+    }
+  }
+  // Sources the caller left out still apply, ranked below the listed ones.
+  for (const source of COLOR_SOURCES) {
+    if (!ranked.includes(source)) {
+      ranked.push(source);
+    }
+  }
+  return ranked;
+}
+
+// The first source that sets a field wins that field, so a high-priority color
+// that sets only `text` still inherits the background below it.
+function mergeColorSpecs(
+  priority: ColorSource[],
+  sources: Partial<Record<ColorSource, ColorSpec | undefined>>,
+): ColorSpec {
+  const merged: ColorSpec = {};
+  for (const source of priority) {
+    const spec = sources[source];
+    if (!spec) {
+      continue;
+    }
+    for (const field of COLOR_FIELDS) {
+      if (merged[field] === undefined && spec[field] !== undefined) {
+        merged[field] = spec[field];
+      }
+    }
+  }
+  return merged;
+}
+
+type ItemColorConfig = {
+  priority: ColorSource[];
+  valueColors: Record<string, ColorSpec>;
+  orderColors: Record<string, ColorSpec>;
+  colorPalette: ColorSpec[];
+  baseColor?: ColorSpec;
+};
+
+// Colors that belong to the option itself, wherever it sits in the list.
+function resolveIdentityColors(option: OptionItem, config: ItemColorConfig): ColorSpec {
+  return mergeColorSpecs(config.priority, {
+    value: config.valueColors[option.value],
+    option: option.color,
+  });
+}
+
+function resolveItemColors(
+  option: OptionItem,
+  index: number,
+  count: number,
+  config: ItemColorConfig,
+): ColorSpec {
+  return mergeColorSpecs(config.priority, {
+    value: config.valueColors[option.value],
+    option: option.color,
+    // Positive positions count from the top, negative ones from the bottom.
+    order: config.orderColors[String(index + 1)] ?? config.orderColors[String(index - count)],
+    palette:
+      config.colorPalette.length > 0
+        ? config.colorPalette[index % config.colorPalette.length]
+        : undefined,
+    base: config.baseColor,
+  });
+}
+
 function normalizeOptions(options: Array<string | OptionItem> | undefined): OptionItem[] {
   if (!Array.isArray(options)) {
     return [];
   }
 
-  return options.flatMap((option) => {
+  return options.flatMap((option): OptionItem[] => {
     if (typeof option === "string") {
       return [{ label: option, value: option, icon_url: null }];
     }
@@ -112,7 +243,14 @@ function normalizeOptions(options: Array<string | OptionItem> | undefined): Opti
         option.icon_url === null ||
         typeof option.icon_url === "string")
     ) {
-      return [{ label: option.label, value: option.value, icon_url: option.icon_url ?? null }];
+      return [
+        {
+          label: option.label,
+          value: option.value,
+          icon_url: option.icon_url ?? null,
+          color: toColorSpec(option.color),
+        },
+      ];
     }
 
     return [];
@@ -140,6 +278,7 @@ function normalizeSuggestions(
   labelPath: string,
   valuePath: string,
   iconUrlPath: string | null,
+  colorPath: string | null,
 ): OptionItem[] {
   const rawOptions = getValueAtPath(response, responsePath);
   if (!Array.isArray(rawOptions)) {
@@ -150,6 +289,7 @@ function normalizeSuggestions(
     const label = getValueAtPath(rawOption, labelPath);
     const value = getValueAtPath(rawOption, valuePath);
     const iconUrl = iconUrlPath ? getValueAtPath(rawOption, iconUrlPath) : null;
+    const color = colorPath ? getValueAtPath(rawOption, colorPath) : null;
     if (
       typeof label !== "string" ||
       typeof value !== "string" ||
@@ -158,7 +298,14 @@ function normalizeSuggestions(
       return [];
     }
 
-    return [{ label, value, icon_url: typeof iconUrl === "string" ? iconUrl : null }];
+    return [
+      {
+        label,
+        value,
+        icon_url: typeof iconUrl === "string" ? iconUrl : null,
+        color: toColorSpec(color),
+      },
+    ];
   });
 }
 
@@ -255,6 +402,32 @@ function getReadableTextColor(color: string | undefined): string | undefined {
   return result;
 }
 
+// Labels are clipped by CSS, so the full text is only worth a tooltip when it
+// does not fit. Measuring on hover keeps this off the render path, which matters
+// for the virtualized options list.
+function TruncatedLabel({ className, text }: { className: string; text: string }) {
+  const labelRef = useRef<HTMLSpanElement>(null);
+  const [title, setTitle] = useState<string | undefined>(undefined);
+
+  function updateTitle() {
+    const element = labelRef.current;
+    if (!element) {
+      return;
+    }
+    // scrollWidth/clientWidth are rounded, so ignore sub-pixel differences.
+    const clipped =
+      element.scrollWidth - element.clientWidth > 1 ||
+      element.scrollHeight - element.clientHeight > 1;
+    setTitle(clipped ? text : undefined);
+  }
+
+  return (
+    <span ref={labelRef} className={className} title={title} onMouseEnter={updateTitle}>
+      {text}
+    </span>
+  );
+}
+
 function SortableItem({
   id,
   label,
@@ -264,7 +437,7 @@ function SortableItem({
   disabled,
   showMoveButtons,
   showNumber,
-  itemColor,
+  colors,
   onRemove,
   onMove,
 }: SortableItemProps) {
@@ -281,13 +454,17 @@ function SortableItem({
     transform: CSS.Transform.toString(transform),
     transition,
   };
-  const textColor = getReadableTextColor(itemColor);
-  if (itemColor) {
-    style["--item-bg"] = itemColor;
+  // An explicit text color wins; otherwise stay readable on the background.
+  const textColor = colors.text ?? getReadableTextColor(colors.background);
+  if (colors.background) {
+    style["--item-bg"] = colors.background;
   }
   if (textColor) {
     style["--item-fg"] = textColor;
     style["--item-muted-fg"] = textColor;
+  }
+  if (colors.border) {
+    style["--item-border"] = colors.border;
   }
 
   return (
@@ -311,7 +488,7 @@ function SortableItem({
       {showNumber ? <span className="item-number">{index + 1}</span> : null}
       <span className="item-content">
         {iconUrl ? <img className="item-icon" src={iconUrl} alt="" aria-hidden="true" /> : null}
-        <span className="item-label">{label}</span>
+        <TruncatedLabel className="item-label" text={label} />
       </span>
       <div className="item-actions">
         {showMoveButtons ? (
@@ -379,6 +556,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
     componentArgs.suggestions_icon_url_path === undefined
       ? "icon_url"
       : componentArgs.suggestions_icon_url_path;
+  const suggestionsColorPath = componentArgs.suggestions_color_path ?? null;
   const suggestionsHeadersJson = useMemo(() => {
     const entries = Object.entries(componentArgs.suggestions_headers ?? {}).sort(([left], [right]) =>
       left.localeCompare(right),
@@ -406,8 +584,36 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
   const disabled = Boolean(componentArgs.disabled || streamlitDisabled);
   const showMoveButtons = componentArgs.show_move_buttons ?? true;
   const showNumbers = componentArgs.show_numbers ?? false;
-  const baseColor = componentArgs.base_color ?? undefined;
-  const orderColors = componentArgs.order_colors ?? {};
+  const baseColor = useMemo(
+    () => toColorSpec(componentArgs.base_color),
+    [componentArgs.base_color],
+  );
+  const orderColors = useMemo(
+    () => toColorSpecRecord(componentArgs.order_colors),
+    [componentArgs.order_colors],
+  );
+  const valueColors = useMemo(
+    () => toColorSpecRecord(componentArgs.value_colors),
+    [componentArgs.value_colors],
+  );
+  const colorPalette = useMemo(
+    () => toColorSpecList(componentArgs.color_palette),
+    [componentArgs.color_palette],
+  );
+  const colorPriority = useMemo(
+    () => normalizeColorPriority(componentArgs.color_priority),
+    [componentArgs.color_priority],
+  );
+  const itemColorConfig = useMemo<ItemColorConfig>(
+    () => ({
+      priority: colorPriority,
+      valueColors,
+      orderColors,
+      colorPalette,
+      baseColor,
+    }),
+    [colorPriority, valueColors, orderColors, colorPalette, baseColor],
+  );
   const maxSelections =
     typeof componentArgs.max_selections === "number" && componentArgs.max_selections >= 0
       ? componentArgs.max_selections
@@ -548,6 +754,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
           suggestionsLabelPath,
           suggestionsValuePath,
           suggestionsIconUrlPath,
+          suggestionsColorPath,
         );
         if (suggestionsRequestIdRef.current !== requestId) {
           return;
@@ -573,6 +780,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
     apiQueryEligible,
     query,
     suggestionsApiUrl,
+    suggestionsColorPath,
     suggestionsDebounceMs,
     suggestionsEnabled,
     suggestionsHeaders,
@@ -717,7 +925,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
                 disabled={disabled}
                 showMoveButtons={showMoveButtons}
                 showNumber={showNumbers}
-                itemColor={orderColors[String(index + 1)] ?? baseColor}
+                colors={resolveItemColors(option, index, selected.length, itemColorConfig)}
                 onRemove={removeValue}
                 onMove={moveValue}
               />
@@ -802,6 +1010,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
               >
                 {({ index, style }: ListChildComponentProps) => {
                   const option = filteredOptions[index];
+                  const optionColors = resolveIdentityColors(option, itemColorConfig);
                   return (
                     <li
                       id={`sortable-multiselect-option-${index}`}
@@ -813,6 +1022,16 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
                       onMouseEnter={() => setHighlightedIndex(index)}
                       onClick={() => addValue(option.value)}
                     >
+                      {optionColors.background || optionColors.border ? (
+                        <span
+                          className="option-swatch"
+                          aria-hidden="true"
+                          style={{
+                            background: optionColors.background,
+                            borderColor: optionColors.border,
+                          }}
+                        />
+                      ) : null}
                       {option.icon_url ? (
                         <img
                           className="option-icon"
@@ -821,7 +1040,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
                           aria-hidden="true"
                         />
                       ) : null}
-                      <span className="option-label">{option.label}</span>
+                      <TruncatedLabel className="option-label" text={option.label} />
                     </li>
                   );
                 }}

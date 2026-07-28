@@ -17,21 +17,26 @@ from streamlit_sortable_multiselect import sortable_multiselect
 
 
 SUGGESTIONS = [
-    {"label": "Python", "value": "python"},
-    {"label": "TypeScript", "value": "typescript"},
-    {"label": "JavaScript", "value": "javascript"},
-    {"label": "Java", "value": "java"},
-    {"label": "Kotlin", "value": "kotlin"},
-    {"label": "Swift", "value": "swift"},
-    {"label": "Rust", "value": "rust"},
-    {"label": "Go", "value": "go"},
-    {"label": "Ruby", "value": "ruby"},
-    {"label": "PHP", "value": "php"},
-    {"label": "C", "value": "c"},
-    {"label": "C++", "value": "cpp"},
-    {"label": "C#", "value": "csharp"},
-    {"label": "Dart", "value": "dart"},
-    {"label": "Elixir", "value": "elixir"},
+    {"label": "Python", "value": "python", "color": "#3776ab"},
+    {"label": "TypeScript", "value": "typescript", "color": "#3178c6"},
+    {"label": "JavaScript", "value": "javascript", "color": "#f7df1e"},
+    {"label": "Java", "value": "java", "color": "#ea2d2e"},
+    {"label": "Kotlin", "value": "kotlin", "color": "#7f52ff"},
+    {"label": "Swift", "value": "swift", "color": "#f05138"},
+    # A color may also set the text and border explicitly.
+    {
+        "label": "Rust",
+        "value": "rust",
+        "color": {"background": "#000000", "text": "#ffffff", "border": "#f74c00"},
+    },
+    {"label": "Go", "value": "go", "color": "#00add8"},
+    {"label": "Ruby", "value": "ruby", "color": "#cc342d"},
+    {"label": "PHP", "value": "php", "color": "#777bb4"},
+    {"label": "C", "value": "c", "color": "#a8b9cc"},
+    {"label": "C++", "value": "cpp", "color": "#00599c"},
+    {"label": "C#", "value": "csharp", "color": "#512bd4"},
+    {"label": "Dart", "value": "dart", "color": "#0175c2"},
+    {"label": "Elixir", "value": "elixir", "color": "#4b275f"},
 ]
 
 
@@ -132,6 +137,7 @@ selected = sortable_multiselect(
     suggestions_label_path="label",
     suggestions_value_path="value",
     suggestions_icon_url_path=None,
+    suggestions_color_path="color",
     suggestions_min_chars=1,
     suggestions_debounce_ms=300,
     suggestions_loading_message="Searching...",

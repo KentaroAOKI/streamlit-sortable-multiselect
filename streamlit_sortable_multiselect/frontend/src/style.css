@@ -111,6 +111,15 @@ input {
   background: #f3f4f6;
 }
 
+/* Preview of the color an option carries into the selected list. */
+.option-swatch {
+  border: 1px solid rgba(17, 24, 39, 0.18);
+  border-radius: 4px;
+  flex: 0 0 auto;
+  height: 12px;
+  width: 12px;
+}
+
 .option-empty {
   color: #6b7280;
 }
@@ -138,7 +147,7 @@ input {
 .sortable-item {
   align-items: center;
   background: var(--item-bg, #ffffff);
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--item-border, #d1d5db);
   border-radius: 6px;
   box-sizing: border-box;
   color: var(--item-fg, #111827);
