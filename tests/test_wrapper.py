@@ -53,9 +53,9 @@ def test_returns_default_when_component_has_no_value(monkeypatch):
 
     assert result == ["b", "a"]
     assert calls[0]["options"] == [
-        {"label": "a", "value": "a", "icon_url": None, "color": None},
-        {"label": "b", "value": "b", "icon_url": None, "color": None},
-        {"label": "c", "value": "c", "icon_url": None, "color": None},
+        {"label": "a", "value": "a", "icon_url": None},
+        {"label": "b", "value": "b", "icon_url": None},
+        {"label": "c", "value": "c", "icon_url": None},
     ]
     assert calls[0]["default_selected"] == ["b", "a"]
     assert calls[0]["default"] == ["b", "a"]
@@ -123,10 +123,30 @@ def test_accepts_label_value_icon_options(monkeypatch):
             "label": "Python",
             "value": "python",
             "icon_url": "https://example.com/python.png",
-            "color": None,
         },
-        {"label": "TypeScript", "value": "typescript", "icon_url": None, "color": None},
+        {"label": "TypeScript", "value": "typescript", "icon_url": None},
     ]
+
+
+def test_omits_the_color_key_when_an_option_has_no_color(monkeypatch):
+    calls = []
+
+    def fake_component(**kwargs):
+        calls.append(kwargs)
+        return None
+
+    monkeypatch.setattr(sms, "_component_func", fake_component)
+
+    # Colorless options make up the bulk of large option lists, so the key is
+    # left out of the payload entirely rather than sent as null.
+    sms.sortable_multiselect(
+        "Items",
+        options=["a", {"label": "B", "value": "b"}, {"label": "C", "value": "c", "color": "red"}],
+    )
+
+    assert "color" not in calls[0]["options"][0]
+    assert "color" not in calls[0]["options"][1]
+    assert calls[0]["options"][2]["color"] == {"background": "red"}
 
 
 def test_accepts_per_option_colors(monkeypatch):
@@ -151,7 +171,7 @@ def test_accepts_per_option_colors(monkeypatch):
         ],
     )
 
-    assert [option["color"] for option in calls[0]["options"]] == [
+    assert [option.get("color") for option in calls[0]["options"]] == [
         {"background": "#3776ab"},
         {"background": "#000000", "text": "#ffffff", "border": "#f74c00"},
         None,
@@ -224,6 +244,8 @@ def test_accepts_negative_order_color_positions(monkeypatch):
         ({"label": "Items", "options": ["a"], "color_palette": "red"}, TypeError),
         ({"label": "Items", "options": ["a"], "color_palette": {"background": "red"}}, TypeError),
         ({"label": "Items", "options": ["a"], "color_palette": [None]}, TypeError),
+        ({"label": "Items", "options": ["a"], "order_colors": {1: None}}, TypeError),
+        ({"label": "Items", "options": ["a"], "value_colors": {"a": None}}, TypeError),
         ({"label": "Items", "options": ["a"], "color_palette": [123]}, TypeError),
         ({"label": "Items", "options": ["a"], "color_priority": "order"}, TypeError),
         ({"label": "Items", "options": ["a"], "color_priority": [1]}, TypeError),
@@ -235,6 +257,11 @@ def test_accepts_negative_order_color_positions(monkeypatch):
         ({"label": "Items", "options": ["a"], "base_color": ""}, ValueError),
         ({"label": "Items", "options": ["a"], "base_color": {"backgrond": "red"}}, ValueError),
         ({"label": "Items", "options": ["a"], "base_color": {"background": ""}}, ValueError),
+        ({"label": "Items", "options": ["a"], "base_color": {}}, ValueError),
+        ({"label": "Items", "options": ["a"], "order_colors": {1: {}}}, ValueError),
+        ({"label": "Items", "options": ["a"], "value_colors": {"a": {}}}, ValueError),
+        ({"label": "Items", "options": ["a"], "color_palette": [{}]}, ValueError),
+        ({"label": "Items", "options": [{"label": "A", "value": "a", "color": {}}]}, ValueError),
         ({"label": "Items", "options": ["a"], "color_priority": ["rank"]}, ValueError),
         (
             {"label": "Items", "options": ["a"], "color_priority": ["order", "order"]},

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Streamlit } from "streamlit-component-lib";
 import { SortableMultiselect } from "./App";
@@ -856,48 +857,77 @@ describe("SortableMultiselect", () => {
     expect(screen.getAllByRole("listitem")[0]).toHaveStyle({ "--item-bg": "#fee2e2" });
   });
 
-  it("shows a tooltip when a clipped option label is hovered", () => {
+  // These drive real hovers: hovering an option row also highlights it, which
+  // re-renders the list, and the tooltip has to survive that.
+  it("shows a tooltip when a clipped option label is hovered", async () => {
+    const user = userEvent.setup();
     const longLabel = "An option label that is far too long for the dropdown";
     const restore = stubClippedText(320, 120);
 
     try {
-      renderComponent({ options: [longLabel], default_selected: [] });
+      renderComponent({ options: ["Short", longLabel], default_selected: [] });
       fireEvent.focus(screen.getByLabelText("Search and add item to Items"));
+      expect(screen.getByText(longLabel)).not.toHaveAttribute("title");
 
-      const label = screen.getByText(longLabel);
-      expect(label).not.toHaveAttribute("title");
+      // Row 1 is not the highlighted row, so this also moves the highlight.
+      await user.hover(screen.getByText(longLabel));
 
-      fireEvent.mouseEnter(label);
-      expect(label).toHaveAttribute("title", longLabel);
+      expect(screen.getByText(longLabel)).toHaveAttribute("title", longLabel);
     } finally {
       restore();
     }
   });
 
-  it("shows a tooltip when a clipped selected item label is hovered", () => {
+  it("drops the tooltip when a reused row shows a different option", async () => {
+    const user = userEvent.setup();
+    const restore = stubClippedText(320, 120);
+
+    try {
+      renderComponent({
+        options: ["Alpha long label", "Beta long label"],
+        default_selected: [],
+      });
+      const input = screen.getByLabelText("Search and add item to Items");
+      fireEvent.focus(input);
+
+      await user.hover(screen.getByText("Alpha long label"));
+      expect(screen.getByText("Alpha long label")).toHaveAttribute("title", "Alpha long label");
+
+      // Filtering puts a different option in the same row without a hover.
+      fireEvent.change(input, { target: { value: "Beta" } });
+
+      expect(screen.getByText("Beta long label")).not.toHaveAttribute("title");
+    } finally {
+      restore();
+    }
+  });
+
+  it("shows a tooltip when a clipped selected item label is hovered", async () => {
+    const user = userEvent.setup();
     const longLabel = "A selected item label that is far too long for its row";
     const restore = stubClippedText(320, 120);
 
     try {
       renderComponent({ options: [longLabel], default_selected: [longLabel] });
 
-      const label = screen.getByText(longLabel);
-      fireEvent.mouseEnter(label);
-      expect(label).toHaveAttribute("title", longLabel);
+      await user.hover(screen.getByText(longLabel));
+
+      expect(screen.getByText(longLabel)).toHaveAttribute("title", longLabel);
     } finally {
       restore();
     }
   });
 
-  it("leaves a label that fits without a tooltip", () => {
+  it("leaves a label that fits without a tooltip", async () => {
+    const user = userEvent.setup();
     const restore = stubClippedText(120, 120);
 
     try {
       renderComponent({ default_selected: ["Alpha"] });
 
-      const label = screen.getByText("Alpha");
-      fireEvent.mouseEnter(label);
-      expect(label).not.toHaveAttribute("title");
+      await user.hover(screen.getByText("Alpha"));
+
+      expect(screen.getByText("Alpha")).not.toHaveAttribute("title");
     } finally {
       restore();
     }

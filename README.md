@@ -141,6 +141,11 @@ The default ranking is the table order. Reorder it with `color_priority`; source
 leave out keep their default rank, so `color_priority=["order"]` only promotes
 position colors above everything else.
 
+When a positive and a negative `order_colors` key address the same slot, such as `1`
+and `-3` in a three item list, the positive key wins. Every color must set at least
+one field: `None` and `{}` are rejected rather than ignored, so a mistyped color
+surfaces as an error instead of silently doing nothing.
+
 ```python
 selected = sortable_multiselect(
     "Podium",
@@ -173,6 +178,9 @@ Option labels in the dropdown are shown on one line and cut off with an ellipsis
 they do not fit. Hovering a cut-off label shows the full text as a native tooltip, and
 labels that fit are left without one. Selected item labels wrap onto multiple lines
 instead of being cut off, so they only get a tooltip if surrounding styles clip them.
+
+`examples/tooltip_labels.py` shows the same options in a narrow list and a wide one,
+so the conditional behavior is visible side by side.
 
 ## API Suggestions
 
@@ -234,6 +242,7 @@ Run the example app:
 ```bash
 streamlit run examples/basic.py
 streamlit run examples/color_by_id.py
+streamlit run examples/tooltip_labels.py
 streamlit run examples/api_suggestions.py
 ```
 

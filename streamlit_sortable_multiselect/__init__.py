@@ -80,6 +80,16 @@ def _normalize_color(name: str, color: ColorValue | None) -> dict[str, str] | No
     return spec or None
 
 
+def _require_color(name: str, color: ColorValue | None) -> dict[str, str]:
+    """Return a color that must actually set something."""
+    if color is None:
+        raise TypeError(f"{name} must be a color, not None.")
+    spec = _normalize_color(name, color)
+    if spec is None:
+        raise ValueError(f"{name} must set at least one of: {', '.join(COLOR_FIELDS)}.")
+    return spec
+
+
 def _normalize_options(
     options: Sequence[str | Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -89,9 +99,7 @@ def _normalize_options(
     normalized_options: list[dict[str, Any]] = []
     for option in options:
         if isinstance(option, str):
-            normalized_options.append(
-                {"label": option, "value": option, "icon_url": None, "color": None}
-            )
+            normalized_options.append({"label": option, "value": option, "icon_url": None})
             continue
 
         if not isinstance(option, Mapping):
@@ -106,11 +114,18 @@ def _normalize_options(
             raise TypeError("option dictionaries must contain a string value.")
         if icon_url is not None and not isinstance(icon_url, str):
             raise TypeError("option icon_url must be a string or None.")
-        color = _normalize_color(f"option color for {value!r}", option.get("color"))
 
-        normalized_options.append(
-            {"label": label, "value": value, "icon_url": icon_url, "color": color}
-        )
+        normalized_option: dict[str, Any] = {
+            "label": label,
+            "value": value,
+            "icon_url": icon_url,
+        }
+        # Omitted rather than sent as null: with tens of thousands of options this
+        # key alone is a fifth of the payload the browser has to receive.
+        raw_color = option.get("color")
+        if raw_color is not None:
+            normalized_option["color"] = _require_color(f"option color for {value!r}", raw_color)
+        normalized_options.append(normalized_option)
 
     return normalized_options
 
@@ -132,9 +147,7 @@ def _validate_order_colors(
                 "order_colors keys must be non-zero integers. "
                 "Positive keys count from the top, negative keys count from the bottom."
             )
-        spec = _normalize_color(f"order_colors[{position}]", color)
-        if spec is not None:
-            result[position] = spec
+        result[position] = _require_color(f"order_colors[{position}]", color)
     return result
 
 
@@ -150,9 +163,7 @@ def _validate_value_colors(
     for value, color in value_colors.items():
         if not isinstance(value, str):
             raise TypeError("value_colors keys must be strings.")
-        spec = _normalize_color(f"value_colors[{value!r}]", color)
-        if spec is not None:
-            result[value] = spec
+        result[value] = _require_color(f"value_colors[{value!r}]", color)
     return result
 
 
@@ -164,13 +175,10 @@ def _validate_color_palette(
     if isinstance(color_palette, (str, Mapping)) or not isinstance(color_palette, Iterable):
         raise TypeError("color_palette must be a sequence of colors.")
 
-    result: list[dict[str, str]] = []
-    for index, color in enumerate(color_palette):
-        spec = _normalize_color(f"color_palette[{index}]", color)
-        if spec is None:
-            raise TypeError("color_palette entries must be colors.")
-        result.append(spec)
-    return result
+    return [
+        _require_color(f"color_palette[{index}]", color)
+        for index, color in enumerate(color_palette)
+    ]
 
 
 def _validate_color_priority(color_priority: Sequence[str] | None) -> list[str]:
@@ -405,7 +413,7 @@ def sortable_multiselect(
     if not isinstance(show_numbers, bool):
         raise TypeError("show_numbers must be a bool.")
 
-    base_color_value = _normalize_color("base_color", base_color)
+    base_color_value = None if base_color is None else _require_color("base_color", base_color)
     option_items = _normalize_options(options)
     option_values = [option["value"] for option in option_items]
     default_values = _validate_string_sequence("default", default)

@@ -407,9 +407,9 @@ function getReadableTextColor(color: string | undefined): string | undefined {
 // for the virtualized options list.
 function TruncatedLabel({ className, text }: { className: string; text: string }) {
   const labelRef = useRef<HTMLSpanElement>(null);
-  const [title, setTitle] = useState<string | undefined>(undefined);
+  const [measured, setMeasured] = useState<{ text: string; clipped: boolean } | null>(null);
 
-  function updateTitle() {
+  function measure() {
     const element = labelRef.current;
     if (!element) {
       return;
@@ -418,13 +418,60 @@ function TruncatedLabel({ className, text }: { className: string; text: string }
     const clipped =
       element.scrollWidth - element.clientWidth > 1 ||
       element.scrollHeight - element.clientHeight > 1;
-    setTitle(clipped ? text : undefined);
+    setMeasured({ text, clipped });
   }
 
+  // The virtualized list reuses row components for different options, so a
+  // measurement only counts while the row still shows the text it was taken from.
+  const title = measured?.text === text && measured.clipped ? text : undefined;
+
   return (
-    <span ref={labelRef} className={className} title={title} onMouseEnter={updateTitle}>
+    <span ref={labelRef} className={className} title={title} onMouseEnter={measure}>
       {text}
     </span>
+  );
+}
+
+type OptionRowData = {
+  options: OptionItem[];
+  highlightedIndex: number;
+  colorConfig: ItemColorConfig;
+  onHighlight: (index: number) => void;
+  onSelect: (value: string) => void;
+};
+
+// Must be a stable component type. react-window renders the list's child as an
+// element type, so an inline function would be a new type on every parent render
+// and would remount every visible row, discarding per-row state such as the
+// hover measurement above.
+function OptionRow({ index, style, data }: ListChildComponentProps<OptionRowData>) {
+  const option = data.options[index];
+  const colors = resolveIdentityColors(option, data.colorConfig);
+  const isHighlighted = index === data.highlightedIndex;
+
+  return (
+    <li
+      id={`sortable-multiselect-option-${index}`}
+      className={`option-item${isHighlighted ? " highlighted" : ""}`}
+      style={style}
+      role="option"
+      aria-selected={isHighlighted}
+      onMouseDown={(event) => event.preventDefault()}
+      onMouseEnter={() => data.onHighlight(index)}
+      onClick={() => data.onSelect(option.value)}
+    >
+      {colors.background || colors.border ? (
+        <span
+          className="option-swatch"
+          aria-hidden="true"
+          style={{ background: colors.background, borderColor: colors.border }}
+        />
+      ) : null}
+      {option.icon_url ? (
+        <img className="option-icon" src={option.icon_url} alt="" aria-hidden="true" />
+      ) : null}
+      <TruncatedLabel className="option-label" text={option.label} />
+    </li>
   );
 }
 
@@ -1007,43 +1054,15 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
                 itemSize={OPTION_ROW_HEIGHT}
                 width="100%"
                 overscanCount={8}
-              >
-                {({ index, style }: ListChildComponentProps) => {
-                  const option = filteredOptions[index];
-                  const optionColors = resolveIdentityColors(option, itemColorConfig);
-                  return (
-                    <li
-                      id={`sortable-multiselect-option-${index}`}
-                      className={`option-item${index === highlightedIndex ? " highlighted" : ""}`}
-                      style={style}
-                      role="option"
-                      aria-selected={index === highlightedIndex}
-                      onMouseDown={(event) => event.preventDefault()}
-                      onMouseEnter={() => setHighlightedIndex(index)}
-                      onClick={() => addValue(option.value)}
-                    >
-                      {optionColors.background || optionColors.border ? (
-                        <span
-                          className="option-swatch"
-                          aria-hidden="true"
-                          style={{
-                            background: optionColors.background,
-                            borderColor: optionColors.border,
-                          }}
-                        />
-                      ) : null}
-                      {option.icon_url ? (
-                        <img
-                          className="option-icon"
-                          src={option.icon_url}
-                          alt=""
-                          aria-hidden="true"
-                        />
-                      ) : null}
-                      <TruncatedLabel className="option-label" text={option.label} />
-                    </li>
-                  );
+                itemData={{
+                  options: filteredOptions,
+                  highlightedIndex,
+                  colorConfig: itemColorConfig,
+                  onHighlight: setHighlightedIndex,
+                  onSelect: addValue,
                 }}
+              >
+                {OptionRow}
               </FixedSizeList>
             )}
           </div>
