@@ -78,6 +78,7 @@ st.write(selected)
 | `value_colors` | `Mapping[str, str \| Mapping[str, str]] \| None` | `None` | Per-value colors keyed by option value, for example `{"python": "#3776ab"}`. These follow an item as it is reordered. |
 | `color_palette` | `Sequence[str \| Mapping[str, str]] \| None` | `None` | Colors cycled across selected positions. Position 1 uses the first entry and the palette repeats for longer selections. |
 | `color_priority` | `Sequence[str] \| None` | `None` | Ranking of the color sources `"value"`, `"option"`, `"order"`, `"palette"`, and `"base"`. Omitted sources keep their default rank. |
+| `tooltip_color` | `str \| Mapping[str, str] \| None` | `None` | Color of the tooltip shown for labels that do not fit. `None` uses the built-in dark tooltip. See [Labels](#labels). |
 | `max_selections` | `int \| None` | `None` | Maximum number of selected items. `None` means no limit. Use `0` to prevent any selections. |
 | `max_selections_placeholder` | `str` | `"Selection limit reached"` | Placeholder shown when `max_selections` has been reached. This takes precedence over `placeholder` and `no_options_placeholder`. |
 | `empty_message` | `str` | `"No items selected"` | Message shown where the selected list appears when no items are selected. |
@@ -186,6 +187,19 @@ about a second, and flips above or below the label to stay inside the component 
 It disappears as soon as the pointer leaves, the list scrolls, or the row it points at
 changes. Screen readers are unaffected either way: a clipped label is cut off visually
 but its full text is always in the DOM.
+
+`tooltip_color` restyles it, using the same color form as everything above. A string
+sets the background and the text follows for contrast; a mapping may also set `text`
+and `border`. Because the component renders inside an iframe, this argument is the only
+way to change the tooltip: styles from the surrounding app cannot reach it.
+
+```python
+tooltip_color="#1e3a8a"                                              # white text follows
+tooltip_color={"background": "#ffffff", "text": "#111827", "border": "#d1d5db"}
+```
+
+A light tooltip needs a `border` to separate it from the content behind it. The arrow
+picks up both the background and the border, so it stays attached either way.
 
 `examples/tooltip_labels.py` shows the same options in a narrow list and a wide one,
 so the conditional behavior is visible side by side.

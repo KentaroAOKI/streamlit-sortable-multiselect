@@ -29,6 +29,7 @@ def test_returns_default_when_component_has_no_value(monkeypatch):
         value_colors={"a": {"background": "#fef9c3", "text": "#713f12"}},
         color_palette=["#f8fafc", {"border": "#94a3b8"}],
         color_priority=["order", "value"],
+        tooltip_color={"background": "#ffffff", "text": "#111827", "border": "#d1d5db"},
         suggestions_color_path="theme.color",
         max_selections=2,
         max_selections_placeholder="Up to 2 items",
@@ -69,6 +70,11 @@ def test_returns_default_when_component_has_no_value(monkeypatch):
     assert calls[0]["value_colors"] == {"a": {"background": "#fef9c3", "text": "#713f12"}}
     assert calls[0]["color_palette"] == [{"background": "#f8fafc"}, {"border": "#94a3b8"}]
     assert calls[0]["color_priority"] == ["order", "value", "option", "palette", "base"]
+    assert calls[0]["tooltip_color"] == {
+        "background": "#ffffff",
+        "text": "#111827",
+        "border": "#d1d5db",
+    }
     assert calls[0]["suggestions_color_path"] == "theme.color"
     assert calls[0]["max_selections"] == 2
     assert calls[0]["max_selections_placeholder"] == "Up to 2 items"
@@ -251,6 +257,7 @@ def test_accepts_negative_order_color_positions(monkeypatch):
         ({"label": "Items", "options": ["a"], "color_priority": [1]}, TypeError),
         ({"label": "Items", "options": [{"label": "A", "value": "a", "color": 1}]}, TypeError),
         ({"label": "Items", "options": ["a"], "suggestions_color_path": 1}, TypeError),
+        ({"label": "Items", "options": ["a"], "tooltip_color": 1}, TypeError),
         ({"label": "Items", "options": ["a"], "max_selections": True}, TypeError),
         ({"label": "Items", "options": ["a"], "max_selections": 1.5}, TypeError),
         ({"label": "Items", "options": ["a"], "order_colors": {0: "red"}}, ValueError),
@@ -261,6 +268,8 @@ def test_accepts_negative_order_color_positions(monkeypatch):
         ({"label": "Items", "options": ["a"], "order_colors": {1: {}}}, ValueError),
         ({"label": "Items", "options": ["a"], "value_colors": {"a": {}}}, ValueError),
         ({"label": "Items", "options": ["a"], "color_palette": [{}]}, ValueError),
+        ({"label": "Items", "options": ["a"], "tooltip_color": {}}, ValueError),
+        ({"label": "Items", "options": ["a"], "tooltip_color": {"fill": "red"}}, ValueError),
         ({"label": "Items", "options": [{"label": "A", "value": "a", "color": {}}]}, ValueError),
         ({"label": "Items", "options": ["a"], "color_priority": ["rank"]}, ValueError),
         (
@@ -318,6 +327,7 @@ def test_allows_zero_max_selections(monkeypatch):
     assert calls[0]["value_colors"] == {}
     assert calls[0]["color_palette"] == []
     assert calls[0]["color_priority"] == ["value", "option", "order", "palette", "base"]
+    assert calls[0]["tooltip_color"] is None
     assert calls[0]["suggestions_color_path"] is None
     assert calls[0]["selected_position"] == "bottom"
     assert calls[0]["icon_size"] == 20

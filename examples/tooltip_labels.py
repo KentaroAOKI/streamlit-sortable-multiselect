@@ -59,6 +59,37 @@ with wide_column:
 
 st.divider()
 
+st.subheader("Styling the tooltip")
+
+st.write(
+    "`tooltip_color` takes the same color form as item colors. Both lists below are "
+    "narrow, so both cut their labels off; only the tooltip styling differs."
+)
+
+light_column, brand_column = st.columns(2)
+
+with light_column:
+    st.caption("Light, with a border to separate it from the page.")
+    sortable_multiselect(
+        "Reports",
+        options=REPORTS,
+        placeholder="Open me...",
+        tooltip_color={"background": "#ffffff", "text": "#111827", "border": "#d1d5db"},
+        key="tooltip_light",
+    )
+
+with brand_column:
+    st.caption("A background only: the text color follows for contrast.")
+    sortable_multiselect(
+        "Reports",
+        options=REPORTS,
+        placeholder="Open me...",
+        tooltip_color="#fde68a",
+        key="tooltip_brand",
+    )
+
+st.divider()
+
 st.subheader("What to look for")
 
 st.markdown(
@@ -78,6 +109,8 @@ st.markdown(
    instead of being cut off by the top edge of the component frame.
 7. **Scroll the dropdown while a tooltip is open** — it disappears rather than
    floating away from the row it belongs to.
+8. **The styled pair above** — the light one keeps a visible outline including
+   around its arrow, and the yellow one gets dark text without being told to.
 """
 )
 

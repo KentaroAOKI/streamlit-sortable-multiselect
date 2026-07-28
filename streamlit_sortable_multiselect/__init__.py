@@ -315,6 +315,7 @@ def sortable_multiselect(
     value_colors: Mapping[str, ColorValue] | None = None,
     color_palette: Sequence[ColorValue] | None = None,
     color_priority: Sequence[str] | None = None,
+    tooltip_color: ColorValue | None = None,
     suggestions_color_path: str | None = None,
     key: str | None = None,
 ) -> list[str]:
@@ -387,6 +388,10 @@ def sortable_multiselect(
     color_priority:
         Ranking of the color sources "value", "option", "order", "palette", and "base".
         Earlier sources win, field by field. Omitted sources keep their default rank.
+    tooltip_color:
+        Color of the tooltip shown for labels that do not fit. A string sets the
+        background and the text follows for contrast; a mapping may also set "text"
+        and "border". None uses the built-in dark tooltip.
     suggestions_color_path:
         Optional dot-separated path to each suggestion's color. None disables API colors.
     key:
@@ -414,6 +419,9 @@ def sortable_multiselect(
         raise TypeError("show_numbers must be a bool.")
 
     base_color_value = None if base_color is None else _require_color("base_color", base_color)
+    tooltip_color_value = (
+        None if tooltip_color is None else _require_color("tooltip_color", tooltip_color)
+    )
     option_items = _normalize_options(options)
     option_values = [option["value"] for option in option_items]
     default_values = _validate_string_sequence("default", default)
@@ -497,6 +505,7 @@ def sortable_multiselect(
         value_colors=value_color_values,
         color_palette=color_palette_values,
         color_priority=color_priority_values,
+        tooltip_color=tooltip_color_value,
         max_selections=max_selection_count,
         max_selections_placeholder=max_selections_placeholder,
         empty_message=empty_message,

@@ -899,6 +899,56 @@ describe("SortableMultiselect", () => {
     }
   });
 
+  it("colors the tooltip from tooltip_color", async () => {
+    const user = userEvent.setup();
+    const longLabel = "An option label that is far too long for the dropdown";
+    const restore = stubClippedText(320, 120);
+
+    try {
+      renderComponent({
+        options: [longLabel],
+        default_selected: [],
+        tooltip_color: { background: "#ffffff", text: "#111827", border: "#d1d5db" },
+      });
+      fireEvent.focus(screen.getByLabelText("Search and add item to Items"));
+
+      await user.hover(screen.getByText(longLabel));
+
+      expect(await screen.findByRole("tooltip")).toHaveStyle({
+        "--tooltip-bg": "#ffffff",
+        "--tooltip-fg": "#111827",
+        "--tooltip-border": "#d1d5db",
+      });
+    } finally {
+      restore();
+    }
+  });
+
+  it("picks readable tooltip text when only a background is given", async () => {
+    const user = userEvent.setup();
+    const longLabel = "An option label that is far too long for the dropdown";
+    const restore = stubClippedText(320, 120);
+
+    try {
+      renderComponent({
+        options: [longLabel],
+        default_selected: [],
+        tooltip_color: "#fde68a",
+      });
+      fireEvent.focus(screen.getByLabelText("Search and add item to Items"));
+
+      await user.hover(screen.getByText(longLabel));
+
+      // Light background, so the text has to go dark rather than stay white.
+      expect(await screen.findByRole("tooltip")).toHaveStyle({
+        "--tooltip-bg": "#fde68a",
+        "--tooltip-fg": "#111827",
+      });
+    } finally {
+      restore();
+    }
+  });
+
   it("drops the tooltip when a reused row shows a different option", async () => {
     const user = userEvent.setup();
     const restore = stubClippedText(320, 120);

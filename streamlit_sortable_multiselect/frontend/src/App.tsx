@@ -65,6 +65,7 @@ type Args = {
   value_colors?: Record<string, ColorValue>;
   color_palette?: ColorValue[];
   color_priority?: string[];
+  tooltip_color?: ColorValue;
   max_selections?: number | null;
   max_selections_placeholder?: string;
   empty_message?: string;
@@ -127,6 +128,9 @@ type TooltipStyle = {
   top: number;
   maxWidth: number;
   "--tooltip-arrow-left"?: string;
+  "--tooltip-bg"?: string;
+  "--tooltip-fg"?: string;
+  "--tooltip-border"?: string;
 };
 
 type TooltipController = {
@@ -713,6 +717,10 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
     () => normalizeColorPriority(componentArgs.color_priority),
     [componentArgs.color_priority],
   );
+  const tooltipColor = useMemo(
+    () => toColorSpec(componentArgs.tooltip_color),
+    [componentArgs.tooltip_color],
+  );
   const itemColorConfig = useMemo<ItemColorConfig>(
     () => ({
       priority: colorPriority,
@@ -1090,6 +1098,11 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
               top: tooltip.top,
               maxWidth: tooltip.maxWidth,
               "--tooltip-arrow-left": `${tooltip.arrowLeft}px`,
+              "--tooltip-bg": tooltipColor?.background,
+              // Same rule as items: an explicit text color wins, otherwise stay
+              // readable against whatever background was given.
+              "--tooltip-fg": tooltipColor?.text ?? getReadableTextColor(tooltipColor?.background),
+              "--tooltip-border": tooltipColor?.border,
             } as TooltipStyle
           }
         >

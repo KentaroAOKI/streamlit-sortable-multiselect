@@ -138,11 +138,12 @@ input {
 /* Anchored to the label it describes and kept inside the component frame, which
    a native title tooltip does not have to care about. */
 .label-tooltip {
-  background: #1f2430;
+  background: var(--tooltip-bg, #1f2430);
+  border: 1px solid var(--tooltip-border, transparent);
   border-radius: 6px;
   box-shadow: 0 6px 18px rgba(49, 51, 63, 0.28);
   box-sizing: border-box;
-  color: #f9fafb;
+  color: var(--tooltip-fg, #f9fafb);
   font-size: 12px;
   line-height: 1.45;
   overflow-wrap: anywhere;
@@ -156,6 +157,9 @@ input {
   transform: translateY(-100%);
 }
 
+/* Two stacked triangles: ::before carries the border color and sits one pixel
+   further out, so a bordered tooltip keeps its outline around the arrow. */
+.label-tooltip::before,
 .label-tooltip::after {
   border: 5px solid transparent;
   content: "";
@@ -164,13 +168,23 @@ input {
   position: absolute;
 }
 
+.label-tooltip.above::before {
+  border-top-color: var(--tooltip-border, transparent);
+  top: calc(100% + 1px);
+}
+
 .label-tooltip.above::after {
-  border-top-color: #1f2430;
+  border-top-color: var(--tooltip-bg, #1f2430);
   top: 100%;
 }
 
+.label-tooltip.below::before {
+  border-bottom-color: var(--tooltip-border, transparent);
+  bottom: calc(100% + 1px);
+}
+
 .label-tooltip.below::after {
-  border-bottom-color: #1f2430;
+  border-bottom-color: var(--tooltip-bg, #1f2430);
   bottom: 100%;
 }
 
