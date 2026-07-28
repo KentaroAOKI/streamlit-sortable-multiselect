@@ -135,6 +135,45 @@ input {
   color: #b91c1c;
 }
 
+/* Anchored to the label it describes and kept inside the component frame, which
+   a native title tooltip does not have to care about. */
+.label-tooltip {
+  background: #1f2430;
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(49, 51, 63, 0.28);
+  box-sizing: border-box;
+  color: #f9fafb;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  padding: 6px 9px;
+  pointer-events: none;
+  position: fixed;
+  z-index: 20;
+}
+
+.label-tooltip.above {
+  transform: translateY(-100%);
+}
+
+.label-tooltip::after {
+  border: 5px solid transparent;
+  content: "";
+  left: var(--tooltip-arrow-left, 12px);
+  margin-left: -5px;
+  position: absolute;
+}
+
+.label-tooltip.above::after {
+  border-top-color: #1f2430;
+  top: 100%;
+}
+
+.label-tooltip.below::after {
+  border-bottom-color: #1f2430;
+  bottom: 100%;
+}
+
 .selected-list {
   display: flex;
   flex-direction: column;

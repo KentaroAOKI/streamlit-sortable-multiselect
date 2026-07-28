@@ -1,7 +1,9 @@
 import {
+  createContext,
   forwardRef,
   HTMLProps,
   KeyboardEvent,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -110,6 +112,59 @@ type ItemStyle = {
 };
 
 type SuggestionsStatus = "idle" | "loading" | "success" | "error";
+
+type TooltipState = {
+  text: string;
+  left: number;
+  top: number;
+  maxWidth: number;
+  placement: "above" | "below";
+  arrowLeft: number;
+};
+
+type TooltipStyle = {
+  left: number;
+  top: number;
+  maxWidth: number;
+  "--tooltip-arrow-left"?: string;
+};
+
+type TooltipController = {
+  show: (text: string, element: HTMLElement) => void;
+  hide: () => void;
+};
+
+const TooltipContext = createContext<TooltipController>({
+  show: () => undefined,
+  hide: () => undefined,
+});
+
+const TOOLTIP_MAX_WIDTH = 320;
+const TOOLTIP_GAP = 8;
+// Long enough that sweeping down a list does not flash a tooltip per row, short
+// enough to feel immediate. The native title delay is roughly a second.
+const TOOLTIP_DELAY_MS = 180;
+
+// The component lives in an iframe, so a tooltip cannot overflow it the way a
+// native one can. Anchor it to the label and keep it inside the frame.
+function computeTooltipPosition(element: HTMLElement, text: string): TooltipState {
+  const rect = element.getBoundingClientRect();
+  const viewportWidth = window.innerWidth || rect.right;
+  const maxWidth = Math.max(120, Math.min(TOOLTIP_MAX_WIDTH, viewportWidth - TOOLTIP_GAP * 2));
+  const left = Math.min(
+    Math.max(TOOLTIP_GAP, rect.left),
+    Math.max(TOOLTIP_GAP, viewportWidth - maxWidth - TOOLTIP_GAP),
+  );
+  // Prefer above; flip below when the label sits too close to the top edge.
+  const placement = rect.top >= 88 ? "above" : "below";
+  const top = placement === "above" ? rect.top - TOOLTIP_GAP : rect.bottom + TOOLTIP_GAP;
+  const arrowLeft = Math.min(
+    Math.max(rect.left + rect.width / 2 - left, 12),
+    Math.max(12, maxWidth - 12),
+  );
+
+  return { text, left, top, maxWidth, placement, arrowLeft };
+}
 
 function toColorSpec(color: unknown): ColorSpec | undefined {
   if (typeof color === "string") {
@@ -407,9 +462,9 @@ function getReadableTextColor(color: string | undefined): string | undefined {
 // for the virtualized options list.
 function TruncatedLabel({ className, text }: { className: string; text: string }) {
   const labelRef = useRef<HTMLSpanElement>(null);
-  const [measured, setMeasured] = useState<{ text: string; clipped: boolean } | null>(null);
+  const tooltip = useContext(TooltipContext);
 
-  function measure() {
+  function onEnter() {
     const element = labelRef.current;
     if (!element) {
       return;
@@ -418,15 +473,22 @@ function TruncatedLabel({ className, text }: { className: string; text: string }
     const clipped =
       element.scrollWidth - element.clientWidth > 1 ||
       element.scrollHeight - element.clientHeight > 1;
-    setMeasured({ text, clipped });
+    if (clipped) {
+      tooltip.show(text, element);
+    } else {
+      tooltip.hide();
+    }
   }
 
-  // The virtualized list reuses row components for different options, so a
-  // measurement only counts while the row still shows the text it was taken from.
-  const title = measured?.text === text && measured.clipped ? text : undefined;
-
+  // The full text is always in the DOM and only clipped visually, so screen
+  // readers read it whether or not the tooltip is showing.
   return (
-    <span ref={labelRef} className={className} title={title} onMouseEnter={measure}>
+    <span
+      ref={labelRef}
+      className={className}
+      onMouseEnter={onEnter}
+      onMouseLeave={tooltip.hide}
+    >
       {text}
     </span>
   );
@@ -678,6 +740,22 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
   const [selectedRemoteOptions, setSelectedRemoteOptions] = useState<Map<string, OptionItem>>(
     () => new Map(),
   );
+  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+  const tooltipTimerRef = useRef<number | undefined>(undefined);
+  const tooltipController = useMemo<TooltipController>(
+    () => ({
+      show: (text, element) => {
+        const next = computeTooltipPosition(element, text);
+        window.clearTimeout(tooltipTimerRef.current);
+        tooltipTimerRef.current = window.setTimeout(() => setTooltip(next), TOOLTIP_DELAY_MS);
+      },
+      hide: () => {
+        window.clearTimeout(tooltipTimerRef.current);
+        setTooltip(null);
+      },
+    }),
+    [],
+  );
   const searchInputRef = useRef<HTMLInputElement>(null);
   const optionsListRef = useRef<FixedSizeList>(null);
   const suggestionsRequestIdRef = useRef(0);
@@ -703,6 +781,8 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
     Streamlit.setComponentValue(selected);
     Streamlit.setFrameHeight();
   }, [selected]);
+
+  useEffect(() => () => window.clearTimeout(tooltipTimerRef.current), []);
 
   useEffect(() => {
     Streamlit.setFrameHeight();
@@ -848,6 +928,11 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
     }
   }, [filteredOptions.length, highlightedIndex]);
 
+  // Never leave a tooltip anchored to a row whose content changed or went away.
+  useEffect(() => {
+    tooltipController.hide();
+  }, [filteredOptions, selected, showOptionsPopover, tooltipController]);
+
   useEffect(() => {
     if (isOpen && canAddOptions) {
       optionsListRef.current?.scrollToItem(highlightedIndex, "auto");
@@ -984,6 +1069,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
   );
 
   return (
+    <TooltipContext.Provider value={tooltipController}>
     <div
       className={`sortable-multiselect selected-position-${selectedPosition}`}
       aria-disabled={disabled}
@@ -994,6 +1080,22 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
         } as ItemStyle
       }
     >
+      {tooltip ? (
+        <div
+          className={`label-tooltip ${tooltip.placement}`}
+          role="tooltip"
+          style={
+            {
+              left: tooltip.left,
+              top: tooltip.top,
+              maxWidth: tooltip.maxWidth,
+              "--tooltip-arrow-left": `${tooltip.arrowLeft}px`,
+            } as TooltipStyle
+          }
+        >
+          {tooltip.text}
+        </div>
+      ) : null}
       {label ? <label className="component-label">{label}</label> : null}
       {selectedPosition === "top" ? selectedItems : null}
       <div className="search-combobox">
@@ -1054,6 +1156,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
                 itemSize={OPTION_ROW_HEIGHT}
                 width="100%"
                 overscanCount={8}
+                onScroll={tooltipController.hide}
                 itemData={{
                   options: filteredOptions,
                   highlightedIndex,
@@ -1071,6 +1174,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
 
       {selectedPosition === "bottom" ? selectedItems : null}
     </div>
+    </TooltipContext.Provider>
   );
 }
 

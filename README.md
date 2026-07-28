@@ -175,9 +175,17 @@ shows position colors staying with the slot while id colors travel with the item
 ## Labels
 
 Option labels in the dropdown are shown on one line and cut off with an ellipsis when
-they do not fit. Hovering a cut-off label shows the full text as a native tooltip, and
-labels that fit are left without one. Selected item labels wrap onto multiple lines
-instead of being cut off, so they only get a tooltip if surrounding styles clip them.
+they do not fit. Hovering a cut-off label shows the full text in a tooltip anchored to
+that label, and labels that fit are left without one. Selected item labels wrap onto
+multiple lines instead of being cut off, so they only get a tooltip if surrounding
+styles clip them.
+
+The tooltip is drawn by the component rather than by the browser's native `title`, so
+it is styled with the rest of the component, appears after a short delay instead of
+about a second, and flips above or below the label to stay inside the component frame.
+It disappears as soon as the pointer leaves, the list scrolls, or the row it points at
+changes. Screen readers are unaffected either way: a clipped label is cut off visually
+but its full text is always in the DOM.
 
 `examples/tooltip_labels.py` shows the same options in a narrow list and a wide one,
 so the conditional behavior is visible side by side.

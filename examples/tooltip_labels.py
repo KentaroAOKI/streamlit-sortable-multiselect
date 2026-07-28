@@ -29,7 +29,8 @@ st.title("Label tooltips")
 st.write(
     "Both dropdowns list the same six reports. The left one is too narrow for the "
     "long labels, so they are cut off with an ellipsis. The right one has room for "
-    "them. **Open both dropdowns and rest the pointer on a label for a second.**"
+    "them. **Open both dropdowns and hover the labels.** A cut-off label shows the "
+    "full text in a tooltip anchored to it; a label that fits shows nothing."
 )
 
 narrow_column, wide_column = st.columns([1, 2])
@@ -73,6 +74,10 @@ st.markdown(
    than only on the first row you touch.
 5. **Type to filter, then hover** — the tooltip always matches the label currently
    in the row, never the one that was there before.
+6. **Hover a row near the top of the list** — the tooltip flips below the label
+   instead of being cut off by the top edge of the component frame.
+7. **Scroll the dropdown while a tooltip is open** — it disappears rather than
+   floating away from the row it belongs to.
 """
 )
 

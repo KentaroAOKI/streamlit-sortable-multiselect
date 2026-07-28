@@ -867,12 +867,33 @@ describe("SortableMultiselect", () => {
     try {
       renderComponent({ options: ["Short", longLabel], default_selected: [] });
       fireEvent.focus(screen.getByLabelText("Search and add item to Items"));
-      expect(screen.getByText(longLabel)).not.toHaveAttribute("title");
+      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 
       // Row 1 is not the highlighted row, so this also moves the highlight.
       await user.hover(screen.getByText(longLabel));
 
-      expect(screen.getByText(longLabel)).toHaveAttribute("title", longLabel);
+      expect(await screen.findByRole("tooltip")).toHaveTextContent(longLabel);
+    } finally {
+      restore();
+    }
+  });
+
+  it("hides the tooltip when the pointer leaves the label", async () => {
+    const user = userEvent.setup();
+    const longLabel = "An option label that is far too long for the dropdown";
+    const restore = stubClippedText(320, 120);
+
+    try {
+      renderComponent({ options: [longLabel], default_selected: [] });
+      fireEvent.focus(screen.getByLabelText("Search and add item to Items"));
+
+      const label = screen.getByText(longLabel);
+      await user.hover(label);
+      expect(await screen.findByRole("tooltip")).toBeInTheDocument();
+
+      await user.unhover(label);
+
+      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
     } finally {
       restore();
     }
@@ -891,12 +912,12 @@ describe("SortableMultiselect", () => {
       fireEvent.focus(input);
 
       await user.hover(screen.getByText("Alpha long label"));
-      expect(screen.getByText("Alpha long label")).toHaveAttribute("title", "Alpha long label");
+      expect(await screen.findByRole("tooltip")).toHaveTextContent("Alpha long label");
 
       // Filtering puts a different option in the same row without a hover.
       fireEvent.change(input, { target: { value: "Beta" } });
 
-      expect(screen.getByText("Beta long label")).not.toHaveAttribute("title");
+      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
     } finally {
       restore();
     }
@@ -912,7 +933,7 @@ describe("SortableMultiselect", () => {
 
       await user.hover(screen.getByText(longLabel));
 
-      expect(screen.getByText(longLabel)).toHaveAttribute("title", longLabel);
+      expect(await screen.findByRole("tooltip")).toHaveTextContent(longLabel);
     } finally {
       restore();
     }
@@ -926,8 +947,10 @@ describe("SortableMultiselect", () => {
       renderComponent({ default_selected: ["Alpha"] });
 
       await user.hover(screen.getByText("Alpha"));
+      // Outlast the show delay: nothing should appear even after it elapses.
+      await new Promise((resolve) => setTimeout(resolve, 250));
 
-      expect(screen.getByText("Alpha")).not.toHaveAttribute("title");
+      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
     } finally {
       restore();
     }
