@@ -162,6 +162,11 @@ selected = sortable_multiselect(
 
 Options that resolve to a color show a small swatch in the options dropdown.
 
+Because an option's `value` is its id, `value_colors` binds a color to an item rather
+than to a slot. `examples/color_by_id.py` puts both side by side: two lists holding the
+same items, one colored by position and one colored by id. Dragging an item in each
+shows position colors staying with the slot while id colors travel with the item.
+
 ## Labels
 
 Option labels in the dropdown are shown on one line and cut off with an ellipsis when
@@ -228,6 +233,7 @@ Run the example app:
 
 ```bash
 streamlit run examples/basic.py
+streamlit run examples/color_by_id.py
 streamlit run examples/api_suggestions.py
 ```
 

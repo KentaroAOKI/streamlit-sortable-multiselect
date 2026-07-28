@@ -709,6 +709,24 @@ describe("SortableMultiselect", () => {
     expect(rows[1]).toHaveStyle({ "--item-bg": "#fee2e2" });
   });
 
+  it("keys value colors by the option id, not the displayed label", () => {
+    renderComponent({
+      options: [
+        { label: "Python", value: "lang-8f21" },
+        { label: "Rust", value: "lang-b45e" },
+      ],
+      default_selected: ["lang-8f21", "lang-b45e"],
+      // The label-keyed entry must be ignored: colors match on the id.
+      value_colors: { "lang-8f21": "#3776ab", Python: "#ff0000", Rust: "#ff0000" },
+    });
+
+    const rows = screen.getAllByRole("listitem");
+    expect(rows[0]).toHaveTextContent("Python");
+    expect(rows[0]).toHaveStyle({ "--item-bg": "#3776ab" });
+    expect(rows[1]).toHaveTextContent("Rust");
+    expect(rows[1]).not.toHaveStyle({ "--item-bg": "#ff0000" });
+  });
+
   it("applies colors carried by an option", () => {
     renderComponent({
       options: [
