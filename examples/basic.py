@@ -53,3 +53,47 @@ selected = sortable_multiselect(
 )
 
 st.write("Selected order:", selected)
+
+
+selected = sortable_multiselect(
+    "Podium",
+    options=[
+        {"label": "Python", "value": "python", "color": "#3776ab"},
+        {"label": "TypeScript", "value": "typescript", "color": "#3178c6"},
+        {
+            "label": "Rust",
+            "value": "rust",
+            "color": {"background": "#000000", "text": "#ffffff", "border": "#f74c00"},
+        },
+        {"label": "Go", "value": "go", "color": "#00add8"},
+        {"label": "Elixir", "value": "elixir"},
+    ],
+    default=["python", "rust", "go"],
+    show_numbers=True,
+    # Medal colors by position: 1 and 2 count from the top, -1 counts from the bottom.
+    order_colors={
+        1: {"background": "#fde68a", "border": "#f59e0b"},
+        2: {"background": "#e5e7eb", "border": "#9ca3af"},
+        -1: {"background": "#fed7aa", "border": "#ea580c"},
+    },
+    # Position wins over the color each option carries.
+    color_priority=["order"],
+    key="podium",
+)
+
+st.write("Selected order:", selected)
+
+
+selected = sortable_multiselect(
+    "Playlist",
+    options=["Intro", "Verse", "Chorus", "Bridge", "Outro", "Encore"],
+    default=["Intro", "Verse", "Chorus", "Bridge"],
+    show_numbers=True,
+    # The palette repeats once there are more items than colors.
+    color_palette=["#eef2ff", "#f0fdf4", "#fef2f2"],
+    # Highlight one value wherever it ends up in the order.
+    value_colors={"Chorus": {"background": "#fef9c3", "border": "#facc15"}},
+    key="playlist",
+)
+
+st.write("Selected order:", selected)

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Streamlit } from "streamlit-component-lib";
 import { SortableMultiselect } from "./App";
@@ -33,6 +34,20 @@ function renderComponent(args = {}) {
       width={640}
     />,
   );
+}
+
+// jsdom reports every box as 0x0, so clipping has to be stubbed to be observable.
+function stubClippedText(scrollWidth: number, clientWidth: number) {
+  const scrollWidthSpy = vi
+    .spyOn(HTMLElement.prototype, "scrollWidth", "get")
+    .mockReturnValue(scrollWidth);
+  const clientWidthSpy = vi
+    .spyOn(HTMLElement.prototype, "clientWidth", "get")
+    .mockReturnValue(clientWidth);
+  return () => {
+    scrollWidthSpy.mockRestore();
+    clientWidthSpy.mockRestore();
+  };
 }
 
 describe("SortableMultiselect", () => {
@@ -669,6 +684,326 @@ describe("SortableMultiselect", () => {
     expect(rows[0]).toHaveStyle({ "--item-bg": "#fee2e2" });
     expect(rows[1]).toHaveTextContent("Alpha");
     expect(rows[1]).toHaveStyle({ "--item-bg": "#dcfce7" });
+  });
+
+  it("applies value colors that follow an item as it moves", async () => {
+    renderComponent({
+      default_selected: ["Alpha", "Beta"],
+      base_color: "#eef2ff",
+      value_colors: { Alpha: "#fee2e2" },
+    });
+
+    let rows = screen.getAllByRole("listitem");
+    expect(rows[0]).toHaveStyle({ "--item-bg": "#fee2e2" });
+    expect(rows[1]).toHaveStyle({ "--item-bg": "#eef2ff" });
+
+    fireEvent.click(screen.getByLabelText("Move Alpha down"));
+
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["Beta", "Alpha"]);
+    });
+
+    rows = screen.getAllByRole("listitem");
+    expect(rows[0]).toHaveTextContent("Beta");
+    expect(rows[0]).toHaveStyle({ "--item-bg": "#eef2ff" });
+    expect(rows[1]).toHaveTextContent("Alpha");
+    expect(rows[1]).toHaveStyle({ "--item-bg": "#fee2e2" });
+  });
+
+  it("keys value colors by the option id, not the displayed label", () => {
+    renderComponent({
+      options: [
+        { label: "Python", value: "lang-8f21" },
+        { label: "Rust", value: "lang-b45e" },
+      ],
+      default_selected: ["lang-8f21", "lang-b45e"],
+      // The label-keyed entry must be ignored: colors match on the id.
+      value_colors: { "lang-8f21": "#3776ab", Python: "#ff0000", Rust: "#ff0000" },
+    });
+
+    const rows = screen.getAllByRole("listitem");
+    expect(rows[0]).toHaveTextContent("Python");
+    expect(rows[0]).toHaveStyle({ "--item-bg": "#3776ab" });
+    expect(rows[1]).toHaveTextContent("Rust");
+    expect(rows[1]).not.toHaveStyle({ "--item-bg": "#ff0000" });
+  });
+
+  it("applies colors carried by an option", () => {
+    renderComponent({
+      options: [
+        { label: "Alpha", value: "Alpha", color: "#fee2e2" },
+        { label: "Beta", value: "Beta" },
+      ],
+      default_selected: ["Alpha", "Beta"],
+      base_color: "#eef2ff",
+    });
+
+    const rows = screen.getAllByRole("listitem");
+    expect(rows[0]).toHaveStyle({ "--item-bg": "#fee2e2" });
+    expect(rows[1]).toHaveStyle({ "--item-bg": "#eef2ff" });
+  });
+
+  it("previews an option color in the options list", () => {
+    renderComponent({
+      options: [
+        { label: "Alpha", value: "Alpha", color: "#fee2e2" },
+        { label: "Beta", value: "Beta" },
+      ],
+      default_selected: [],
+    });
+
+    fireEvent.focus(screen.getByLabelText("Search and add item to Items"));
+
+    const alpha = screen.getByRole("option", { name: "Alpha" });
+    const beta = screen.getByRole("option", { name: "Beta" });
+    expect(alpha.querySelector(".option-swatch")).toHaveStyle({ background: "#fee2e2" });
+    expect(beta.querySelector(".option-swatch")).toBeNull();
+  });
+
+  it("cycles a color palette across selected positions", () => {
+    renderComponent({
+      default_selected: ["Alpha", "Beta", "Gamma"],
+      color_palette: ["#fee2e2", "#dcfce7"],
+    });
+
+    const rows = screen.getAllByRole("listitem");
+    expect(rows[0]).toHaveStyle({ "--item-bg": "#fee2e2" });
+    expect(rows[1]).toHaveStyle({ "--item-bg": "#dcfce7" });
+    expect(rows[2]).toHaveStyle({ "--item-bg": "#fee2e2" });
+  });
+
+  it("counts negative order color positions from the last item", () => {
+    renderComponent({
+      default_selected: ["Alpha", "Beta", "Gamma"],
+      base_color: "#eef2ff",
+      order_colors: { "-1": "#fee2e2" },
+    });
+
+    const rows = screen.getAllByRole("listitem");
+    expect(rows[0]).toHaveStyle({ "--item-bg": "#eef2ff" });
+    expect(rows[1]).toHaveStyle({ "--item-bg": "#eef2ff" });
+    expect(rows[2]).toHaveStyle({ "--item-bg": "#fee2e2" });
+  });
+
+  it("applies text and border colors from a color mapping", () => {
+    renderComponent({
+      default_selected: ["Alpha"],
+      base_color: { background: "#111827", text: "#facc15", border: "#f74c00" },
+    });
+
+    const rows = screen.getAllByRole("listitem");
+    expect(rows[0]).toHaveStyle({
+      "--item-bg": "#111827",
+      "--item-fg": "#facc15",
+      "--item-muted-fg": "#facc15",
+      "--item-border": "#f74c00",
+    });
+  });
+
+  it("fills unset color fields from lower priority sources", () => {
+    renderComponent({
+      default_selected: ["Alpha"],
+      base_color: "#eef2ff",
+      value_colors: { Alpha: { text: "#7f1d1d" } },
+    });
+
+    const rows = screen.getAllByRole("listitem");
+    expect(rows[0]).toHaveStyle({ "--item-bg": "#eef2ff", "--item-fg": "#7f1d1d" });
+  });
+
+  it("ranks color sources with color_priority", () => {
+    const args = {
+      default_selected: ["Alpha"],
+      value_colors: { Alpha: "#fee2e2" },
+      order_colors: { "1": "#dcfce7" },
+    };
+
+    const { unmount } = renderComponent(args);
+    expect(screen.getAllByRole("listitem")[0]).toHaveStyle({ "--item-bg": "#fee2e2" });
+    unmount();
+
+    renderComponent({ ...args, color_priority: ["order"] });
+    expect(screen.getAllByRole("listitem")[0]).toHaveStyle({ "--item-bg": "#dcfce7" });
+  });
+
+  it("reads suggestion colors from the configured path", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{ label: "Delta", value: "delta", theme: { color: "#fee2e2" } }],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderComponent({
+      options: [],
+      default_selected: [],
+      suggestions_api_url: "https://example.com/suggest",
+      suggestions_color_path: "theme.color",
+      suggestions_debounce_ms: 0,
+    });
+
+    const input = screen.getByLabelText("Search and add item to Items");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "de" } });
+
+    const option = await screen.findByRole("option", { name: "Delta" });
+    expect(option.querySelector(".option-swatch")).toHaveStyle({ background: "#fee2e2" });
+
+    fireEvent.click(option);
+
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["delta"]);
+    });
+
+    expect(screen.getAllByRole("listitem")[0]).toHaveStyle({ "--item-bg": "#fee2e2" });
+  });
+
+  // These drive real hovers: hovering an option row also highlights it, which
+  // re-renders the list, and the tooltip has to survive that.
+  it("shows a tooltip when a clipped option label is hovered", async () => {
+    const user = userEvent.setup();
+    const longLabel = "An option label that is far too long for the dropdown";
+    const restore = stubClippedText(320, 120);
+
+    try {
+      renderComponent({ options: ["Short", longLabel], default_selected: [] });
+      fireEvent.focus(screen.getByLabelText("Search and add item to Items"));
+      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+
+      // Row 1 is not the highlighted row, so this also moves the highlight.
+      await user.hover(screen.getByText(longLabel));
+
+      expect(await screen.findByRole("tooltip")).toHaveTextContent(longLabel);
+    } finally {
+      restore();
+    }
+  });
+
+  it("hides the tooltip when the pointer leaves the label", async () => {
+    const user = userEvent.setup();
+    const longLabel = "An option label that is far too long for the dropdown";
+    const restore = stubClippedText(320, 120);
+
+    try {
+      renderComponent({ options: [longLabel], default_selected: [] });
+      fireEvent.focus(screen.getByLabelText("Search and add item to Items"));
+
+      const label = screen.getByText(longLabel);
+      await user.hover(label);
+      expect(await screen.findByRole("tooltip")).toBeInTheDocument();
+
+      await user.unhover(label);
+
+      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    } finally {
+      restore();
+    }
+  });
+
+  it("colors the tooltip from tooltip_color", async () => {
+    const user = userEvent.setup();
+    const longLabel = "An option label that is far too long for the dropdown";
+    const restore = stubClippedText(320, 120);
+
+    try {
+      renderComponent({
+        options: [longLabel],
+        default_selected: [],
+        tooltip_color: { background: "#ffffff", text: "#111827", border: "#d1d5db" },
+      });
+      fireEvent.focus(screen.getByLabelText("Search and add item to Items"));
+
+      await user.hover(screen.getByText(longLabel));
+
+      expect(await screen.findByRole("tooltip")).toHaveStyle({
+        "--tooltip-bg": "#ffffff",
+        "--tooltip-fg": "#111827",
+        "--tooltip-border": "#d1d5db",
+      });
+    } finally {
+      restore();
+    }
+  });
+
+  it("picks readable tooltip text when only a background is given", async () => {
+    const user = userEvent.setup();
+    const longLabel = "An option label that is far too long for the dropdown";
+    const restore = stubClippedText(320, 120);
+
+    try {
+      renderComponent({
+        options: [longLabel],
+        default_selected: [],
+        tooltip_color: "#fde68a",
+      });
+      fireEvent.focus(screen.getByLabelText("Search and add item to Items"));
+
+      await user.hover(screen.getByText(longLabel));
+
+      // Light background, so the text has to go dark rather than stay white.
+      expect(await screen.findByRole("tooltip")).toHaveStyle({
+        "--tooltip-bg": "#fde68a",
+        "--tooltip-fg": "#111827",
+      });
+    } finally {
+      restore();
+    }
+  });
+
+  it("drops the tooltip when a reused row shows a different option", async () => {
+    const user = userEvent.setup();
+    const restore = stubClippedText(320, 120);
+
+    try {
+      renderComponent({
+        options: ["Alpha long label", "Beta long label"],
+        default_selected: [],
+      });
+      const input = screen.getByLabelText("Search and add item to Items");
+      fireEvent.focus(input);
+
+      await user.hover(screen.getByText("Alpha long label"));
+      expect(await screen.findByRole("tooltip")).toHaveTextContent("Alpha long label");
+
+      // Filtering puts a different option in the same row without a hover.
+      fireEvent.change(input, { target: { value: "Beta" } });
+
+      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    } finally {
+      restore();
+    }
+  });
+
+  it("shows a tooltip when a clipped selected item label is hovered", async () => {
+    const user = userEvent.setup();
+    const longLabel = "A selected item label that is far too long for its row";
+    const restore = stubClippedText(320, 120);
+
+    try {
+      renderComponent({ options: [longLabel], default_selected: [longLabel] });
+
+      await user.hover(screen.getByText(longLabel));
+
+      expect(await screen.findByRole("tooltip")).toHaveTextContent(longLabel);
+    } finally {
+      restore();
+    }
+  });
+
+  it("leaves a label that fits without a tooltip", async () => {
+    const user = userEvent.setup();
+    const restore = stubClippedText(120, 120);
+
+    try {
+      renderComponent({ default_selected: ["Alpha"] });
+
+      await user.hover(screen.getByText("Alpha"));
+      // Outlast the show delay: nothing should appear even after it elapses.
+      await new Promise((resolve) => setTimeout(resolve, 250));
+
+      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    } finally {
+      restore();
+    }
   });
 
   it("removes selected items", async () => {

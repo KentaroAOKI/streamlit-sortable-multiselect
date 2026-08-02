@@ -73,8 +73,12 @@ st.write(selected)
 | `disabled` | `bool` | `False` | Disables searching, selecting, removing, dragging, and move buttons. |
 | `show_move_buttons` | `bool` | `True` | Shows up/down buttons on selected items. Drag sorting remains available unless `disabled=True`. |
 | `show_numbers` | `bool` | `False` | Shows 1-based position numbers before selected item labels. |
-| `base_color` | `str \| None` | `None` | Background color applied to all selected items. Accepts CSS color values such as `"#eef2ff"` or `"lightblue"`. |
-| `order_colors` | `Mapping[int, str] \| None` | `None` | Per-position selected item background colors. Keys are 1-based positions, for example `{1: "#fee2e2", 2: "#dcfce7"}`. These override `base_color` for matching positions. |
+| `base_color` | `str \| Mapping[str, str] \| None` | `None` | Fallback color for every selected item. See [Colors](#colors). |
+| `order_colors` | `Mapping[int, str \| Mapping[str, str]] \| None` | `None` | Per-position colors. Positive keys count from the top (`1` is first), negative keys count from the bottom (`-1` is last), for example `{1: "#fee2e2", -1: "#dcfce7"}`. |
+| `value_colors` | `Mapping[str, str \| Mapping[str, str]] \| None` | `None` | Per-value colors keyed by option value, for example `{"python": "#3776ab"}`. These follow an item as it is reordered. |
+| `color_palette` | `Sequence[str \| Mapping[str, str]] \| None` | `None` | Colors cycled across selected positions. Position 1 uses the first entry and the palette repeats for longer selections. |
+| `color_priority` | `Sequence[str] \| None` | `None` | Ranking of the color sources `"value"`, `"option"`, `"order"`, `"palette"`, and `"base"`. Omitted sources keep their default rank. |
+| `tooltip_color` | `str \| Mapping[str, str] \| None` | `None` | Color of the tooltip shown for labels that do not fit. `None` uses the built-in dark tooltip. See [Labels](#labels). |
 | `max_selections` | `int \| None` | `None` | Maximum number of selected items. `None` means no limit. Use `0` to prevent any selections. |
 | `max_selections_placeholder` | `str` | `"Selection limit reached"` | Placeholder shown when `max_selections` has been reached. This takes precedence over `placeholder` and `no_options_placeholder`. |
 | `empty_message` | `str` | `"No items selected"` | Message shown where the selected list appears when no items are selected. |
@@ -88,6 +92,7 @@ st.write(selected)
 | `suggestions_label_path` | `str` | `"label"` | Dot-separated path to each suggestion's display label. |
 | `suggestions_value_path` | `str` | `"value"` | Dot-separated path to each suggestion's returned value. |
 | `suggestions_icon_url_path` | `str \| None` | `"icon_url"` | Optional dot-separated path to each suggestion's icon URL. `None` disables API icons. |
+| `suggestions_color_path` | `str \| None` | `None` | Optional dot-separated path to each suggestion's color. The value may be a CSS color string or a mapping of color fields. `None` disables API colors. |
 | `suggestions_headers` | `Mapping[str, str] \| None` | `None` | HTTP headers sent with suggestions requests. Header values are visible to browser users and must not contain secrets. |
 | `suggestions_min_chars` | `int` | `1` | Minimum trimmed query length before requesting suggestions. Use `0` to allow an empty query. |
 | `suggestions_debounce_ms` | `int` | `300` | Delay in milliseconds between the latest input and the API request. |
@@ -98,10 +103,106 @@ st.write(selected)
 Option dictionaries use this shape:
 
 ```python
-{"label": "Python", "value": "python", "icon_url": "https://www.python.org/static/favicon.ico"}
+{
+    "label": "Python",
+    "value": "python",
+    "icon_url": "https://www.python.org/static/favicon.ico",
+    "color": "#3776ab",
+}
 ```
 
-`icon_url` may be omitted. The returned value is always the `value`, not the display `label`.
+`icon_url` and `color` may be omitted. The returned value is always the `value`, not the display `label`.
+
+## Colors
+
+Anywhere a color is accepted, pass either a CSS color string or a mapping that sets
+any subset of `background`, `text`, and `border`:
+
+```python
+"#fee2e2"
+{"background": "#111827", "text": "#facc15", "border": "#f74c00"}
+```
+
+A string sets the background. When `text` is not set, the component picks black or
+white for readability against the resolved background.
+
+Colors come from five sources. Each source contributes a color, and the highest
+ranked source that sets a field wins that field, so a value color that sets only
+`text` still inherits the background from `base_color`:
+
+| Source | Set with | Keyed by |
+| --- | --- | --- |
+| `value` | `value_colors` | Option value. Follows the item as it is reordered. |
+| `option` | `color` in an option dictionary, or `suggestions_color_path` | The option itself. |
+| `order` | `order_colors` | Selected position. `1` is first, `-1` is last. |
+| `palette` | `color_palette` | Selected position, cycling through the palette. |
+| `base` | `base_color` | Every selected item. |
+
+The default ranking is the table order. Reorder it with `color_priority`; sources you
+leave out keep their default rank, so `color_priority=["order"]` only promotes
+position colors above everything else.
+
+When a positive and a negative `order_colors` key address the same slot, such as `1`
+and `-3` in a three item list, the positive key wins. Every color must set at least
+one field: `None` and `{}` are rejected rather than ignored, so a mistyped color
+surfaces as an error instead of silently doing nothing.
+
+```python
+selected = sortable_multiselect(
+    "Podium",
+    options=[
+        {"label": "Python", "value": "python", "color": "#3776ab"},
+        {"label": "Rust", "value": "rust"},
+        {"label": "Go", "value": "go"},
+    ],
+    default=["python", "rust", "go"],
+    # Gold, silver, and bronze by position, ranked above each option's own color.
+    order_colors={
+        1: {"background": "#fde68a", "border": "#f59e0b"},
+        2: {"background": "#e5e7eb", "border": "#9ca3af"},
+        -1: {"background": "#fed7aa", "border": "#ea580c"},
+    },
+    color_priority=["order"],
+)
+```
+
+Options that resolve to a color show a small swatch in the options dropdown.
+
+Because an option's `value` is its id, `value_colors` binds a color to an item rather
+than to a slot. `examples/color_by_id.py` puts both side by side: two lists holding the
+same items, one colored by position and one colored by id. Dragging an item in each
+shows position colors staying with the slot while id colors travel with the item.
+
+## Labels
+
+Option labels in the dropdown are shown on one line and cut off with an ellipsis when
+they do not fit. Hovering a cut-off label shows the full text in a tooltip anchored to
+that label, and labels that fit are left without one. Selected item labels wrap onto
+multiple lines instead of being cut off, so they only get a tooltip if surrounding
+styles clip them.
+
+The tooltip is drawn by the component rather than by the browser's native `title`, so
+it is styled with the rest of the component, appears after a short delay instead of
+about a second, and flips above or below the label to stay inside the component frame.
+It disappears as soon as the pointer leaves, the list scrolls, or the row it points at
+changes. Screen readers are unaffected either way: a clipped label is cut off visually
+but its full text is always in the DOM.
+
+`tooltip_color` restyles it, using the same color form as everything above. A string
+sets the background and the text follows for contrast; a mapping may also set `text`
+and `border`. Because the component renders inside an iframe, this argument is the only
+way to change the tooltip: styles from the surrounding app cannot reach it.
+
+```python
+tooltip_color="#1e3a8a"                                              # white text follows
+tooltip_color={"background": "#ffffff", "text": "#111827", "border": "#d1d5db"}
+```
+
+A light tooltip needs a `border` to separate it from the content behind it. The arrow
+picks up both the background and the border, so it stays attached either way.
+
+`examples/tooltip_labels.py` shows the same options in a narrow list and a wide one,
+so the conditional behavior is visible side by side.
 
 ## API Suggestions
 
@@ -162,6 +263,8 @@ Run the example app:
 
 ```bash
 streamlit run examples/basic.py
+streamlit run examples/color_by_id.py
+streamlit run examples/tooltip_labels.py
 streamlit run examples/api_suggestions.py
 ```
 

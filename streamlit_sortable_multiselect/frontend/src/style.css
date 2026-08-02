@@ -111,6 +111,15 @@ input {
   background: #f3f4f6;
 }
 
+/* Preview of the color an option carries into the selected list. */
+.option-swatch {
+  border: 1px solid rgba(17, 24, 39, 0.18);
+  border-radius: 4px;
+  flex: 0 0 auto;
+  height: 12px;
+  width: 12px;
+}
+
 .option-empty {
   color: #6b7280;
 }
@@ -126,6 +135,59 @@ input {
   color: #b91c1c;
 }
 
+/* Anchored to the label it describes and kept inside the component frame, which
+   a native title tooltip does not have to care about. */
+.label-tooltip {
+  background: var(--tooltip-bg, #1f2430);
+  border: 1px solid var(--tooltip-border, transparent);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(49, 51, 63, 0.28);
+  box-sizing: border-box;
+  color: var(--tooltip-fg, #f9fafb);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  padding: 6px 9px;
+  pointer-events: none;
+  position: fixed;
+  z-index: 20;
+}
+
+.label-tooltip.above {
+  transform: translateY(-100%);
+}
+
+/* Two stacked triangles: ::before carries the border color and sits one pixel
+   further out, so a bordered tooltip keeps its outline around the arrow. */
+.label-tooltip::before,
+.label-tooltip::after {
+  border: 5px solid transparent;
+  content: "";
+  left: var(--tooltip-arrow-left, 12px);
+  margin-left: -5px;
+  position: absolute;
+}
+
+.label-tooltip.above::before {
+  border-top-color: var(--tooltip-border, transparent);
+  top: calc(100% + 1px);
+}
+
+.label-tooltip.above::after {
+  border-top-color: var(--tooltip-bg, #1f2430);
+  top: 100%;
+}
+
+.label-tooltip.below::before {
+  border-bottom-color: var(--tooltip-border, transparent);
+  bottom: calc(100% + 1px);
+}
+
+.label-tooltip.below::after {
+  border-bottom-color: var(--tooltip-bg, #1f2430);
+  bottom: 100%;
+}
+
 .selected-list {
   display: flex;
   flex-direction: column;
@@ -138,7 +200,7 @@ input {
 .sortable-item {
   align-items: center;
   background: var(--item-bg, #ffffff);
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--item-border, #d1d5db);
   border-radius: 6px;
   box-sizing: border-box;
   color: var(--item-fg, #111827);

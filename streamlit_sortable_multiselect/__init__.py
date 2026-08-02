@@ -4,17 +4,28 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence, cast
+from typing import Any, Iterable, Mapping, Sequence, Union, cast
 from urllib.parse import urlparse
 
 import streamlit.components.v1 as components
 
-__version__ = "0.7.5"
-__all__ = ["sortable_multiselect"]
+__version__ = "0.7.6"
+__all__ = ["COLOR_FIELDS", "COLOR_SOURCES", "ColorValue", "sortable_multiselect"]
 
 _COMPONENT_NAME = "streamlit_sortable_multiselect"
 _DEV_SERVER_URL = "http://localhost:5173"
 _RELEASE = os.environ.get("STREAMLIT_SORTABLE_MULTISELECT_DEV") != "1"
+
+#: A color is either a CSS color string (used as the background) or a mapping
+#: that sets any subset of the fields in :data:`COLOR_FIELDS`.
+ColorValue = Union[str, Mapping[str, str]]
+
+#: Styleable parts of a selected item.
+COLOR_FIELDS = ("background", "text", "border")
+
+#: Color sources, in default precedence order. Each source contributes a color
+#: spec, and the highest-priority source that sets a field wins that field.
+COLOR_SOURCES = ("value", "option", "order", "palette", "base")
 
 
 def _declare_component():
@@ -40,11 +51,52 @@ def _validate_string_sequence(name: str, values: Sequence[str] | None) -> list[s
     return result
 
 
-def _normalize_options(options: Sequence[str | Mapping[str, Any]]) -> list[dict[str, str | None]]:
+def _normalize_color(name: str, color: ColorValue | None) -> dict[str, str] | None:
+    """Return a color as a field mapping, or None when nothing is set."""
+    if color is None:
+        return None
+    if isinstance(color, str):
+        if not color:
+            raise ValueError(f"{name} must not be an empty color string.")
+        return {"background": color}
+    if not isinstance(color, Mapping):
+        raise TypeError(
+            f"{name} must be a CSS color string or a mapping with any of: "
+            f"{', '.join(COLOR_FIELDS)}."
+        )
+
+    spec: dict[str, str] = {}
+    for field, field_value in color.items():
+        if field not in COLOR_FIELDS:
+            raise ValueError(
+                f"{name} contains an unknown color field {field!r}. "
+                f"Use any of: {', '.join(COLOR_FIELDS)}."
+            )
+        if not isinstance(field_value, str):
+            raise TypeError(f"{name} color fields must be strings.")
+        if not field_value:
+            raise ValueError(f"{name} color fields must not be empty.")
+        spec[field] = field_value
+    return spec or None
+
+
+def _require_color(name: str, color: ColorValue | None) -> dict[str, str]:
+    """Return a color that must actually set something."""
+    if color is None:
+        raise TypeError(f"{name} must be a color, not None.")
+    spec = _normalize_color(name, color)
+    if spec is None:
+        raise ValueError(f"{name} must set at least one of: {', '.join(COLOR_FIELDS)}.")
+    return spec
+
+
+def _normalize_options(
+    options: Sequence[str | Mapping[str, Any]],
+) -> list[dict[str, Any]]:
     if isinstance(options, str) or not isinstance(options, Iterable):
         raise TypeError("options must be a sequence of strings or option dictionaries.")
 
-    normalized_options: list[dict[str, str | None]] = []
+    normalized_options: list[dict[str, Any]] = []
     for option in options:
         if isinstance(option, str):
             normalized_options.append({"label": option, "value": option, "icon_url": None})
@@ -63,26 +115,94 @@ def _normalize_options(options: Sequence[str | Mapping[str, Any]]) -> list[dict[
         if icon_url is not None and not isinstance(icon_url, str):
             raise TypeError("option icon_url must be a string or None.")
 
-        normalized_options.append({"label": label, "value": value, "icon_url": icon_url})
+        normalized_option: dict[str, Any] = {
+            "label": label,
+            "value": value,
+            "icon_url": icon_url,
+        }
+        # Omitted rather than sent as null: with tens of thousands of options this
+        # key alone is a fifth of the payload the browser has to receive.
+        if "color" in option:
+            normalized_option["color"] = _require_color(
+                f"option color for {value!r}", option["color"]
+            )
+        normalized_options.append(normalized_option)
 
     return normalized_options
 
 
-def _validate_order_colors(order_colors: Mapping[int, str] | None) -> dict[int, str]:
+def _validate_order_colors(
+    order_colors: Mapping[int, ColorValue] | None,
+) -> dict[int, dict[str, str]]:
     if order_colors is None:
         return {}
     if not isinstance(order_colors, Mapping):
-        raise TypeError("order_colors must be a mapping of 1-based positions to color strings.")
+        raise TypeError("order_colors must be a mapping of positions to colors.")
 
-    result: dict[int, str] = {}
+    result: dict[int, dict[str, str]] = {}
     for position, color in order_colors.items():
-        if not isinstance(position, int):
+        if isinstance(position, bool) or not isinstance(position, int):
             raise TypeError("order_colors keys must be integers.")
-        if position < 1:
-            raise ValueError("order_colors keys must be 1 or greater.")
-        if not isinstance(color, str):
-            raise TypeError("order_colors values must be strings.")
-        result[position] = color
+        if position == 0:
+            raise ValueError(
+                "order_colors keys must be non-zero integers. "
+                "Positive keys count from the top, negative keys count from the bottom."
+            )
+        result[position] = _require_color(f"order_colors[{position}]", color)
+    return result
+
+
+def _validate_value_colors(
+    value_colors: Mapping[str, ColorValue] | None,
+) -> dict[str, dict[str, str]]:
+    if value_colors is None:
+        return {}
+    if not isinstance(value_colors, Mapping):
+        raise TypeError("value_colors must be a mapping of option values to colors.")
+
+    result: dict[str, dict[str, str]] = {}
+    for value, color in value_colors.items():
+        if not isinstance(value, str):
+            raise TypeError("value_colors keys must be strings.")
+        result[value] = _require_color(f"value_colors[{value!r}]", color)
+    return result
+
+
+def _validate_color_palette(
+    color_palette: Sequence[ColorValue] | None,
+) -> list[dict[str, str]]:
+    if color_palette is None:
+        return []
+    if isinstance(color_palette, (str, Mapping)) or not isinstance(color_palette, Iterable):
+        raise TypeError("color_palette must be a sequence of colors.")
+
+    return [
+        _require_color(f"color_palette[{index}]", color)
+        for index, color in enumerate(color_palette)
+    ]
+
+
+def _validate_color_priority(color_priority: Sequence[str] | None) -> list[str]:
+    if color_priority is None:
+        return list(COLOR_SOURCES)
+    if isinstance(color_priority, str) or not isinstance(color_priority, Iterable):
+        raise TypeError("color_priority must be a sequence of color source names.")
+
+    result: list[str] = []
+    for source in color_priority:
+        if not isinstance(source, str):
+            raise TypeError("color_priority must contain only strings.")
+        if source not in COLOR_SOURCES:
+            raise ValueError(
+                f"color_priority contains an unknown color source {source!r}. "
+                f"Use any of: {', '.join(COLOR_SOURCES)}."
+            )
+        if source in result:
+            raise ValueError(f"color_priority must not repeat {source!r}.")
+        result.append(source)
+
+    # Sources the caller left out still apply, ranked below the listed ones.
+    result.extend(source for source in COLOR_SOURCES if source not in result)
     return result
 
 
@@ -173,8 +293,8 @@ def sortable_multiselect(
     disabled: bool = False,
     show_move_buttons: bool = True,
     show_numbers: bool = False,
-    base_color: str | None = None,
-    order_colors: Mapping[int, str] | None = None,
+    base_color: ColorValue | None = None,
+    order_colors: Mapping[int, ColorValue] | None = None,
     max_selections: int | None = None,
     max_selections_placeholder: str = "Selection limit reached",
     empty_message: str = "No items selected",
@@ -193,6 +313,11 @@ def sortable_multiselect(
     suggestions_debounce_ms: int = 300,
     suggestions_loading_message: str = "Loading suggestions...",
     suggestions_error_message: str = "Failed to load suggestions",
+    value_colors: Mapping[str, ColorValue] | None = None,
+    color_palette: Sequence[ColorValue] | None = None,
+    color_priority: Sequence[str] | None = None,
+    tooltip_color: ColorValue | None = None,
+    suggestions_color_path: str | None = None,
     key: str | None = None,
 ) -> list[str]:
     """Select multiple string values and return them in user-defined order.
@@ -202,7 +327,8 @@ def sortable_multiselect(
     label:
         Text label rendered above the component.
     options:
-        Available string values, or dictionaries with label, value, and optional icon_url.
+        Available string values, or dictionaries with label, value, and optional
+        icon_url and color.
     default:
         Initially selected values, in the desired initial order.
     placeholder:
@@ -214,9 +340,11 @@ def sortable_multiselect(
     show_numbers:
         Show 1-based numbers before selected items.
     base_color:
-        Background color applied to selected items.
+        Fallback color for every selected item. A CSS color string sets the background;
+        a mapping may set any of "background", "text", and "border".
     order_colors:
-        Per-position background colors keyed by 1-based selected item position.
+        Per-position colors keyed by selected item position. Positive keys count from
+        the top (1 is first), negative keys count from the bottom (-1 is last).
     max_selections:
         Maximum number of selected items. None means no limit.
     max_selections_placeholder:
@@ -253,6 +381,20 @@ def sortable_multiselect(
         Text shown while suggestions are loading.
     suggestions_error_message:
         Text shown when suggestions cannot be loaded.
+    value_colors:
+        Per-value colors keyed by option value. These follow an item as it is reordered.
+    color_palette:
+        Colors cycled across selected positions. Position 1 uses the first entry, and
+        the palette repeats once there are more items than entries.
+    color_priority:
+        Ranking of the color sources "value", "option", "order", "palette", and "base".
+        Earlier sources win, field by field. Omitted sources keep their default rank.
+    tooltip_color:
+        Color of the tooltip shown for labels that do not fit. A string sets the
+        background and the text follows for contrast; a mapping may also set "text"
+        and "border". None uses the built-in dark tooltip.
+    suggestions_color_path:
+        Optional dot-separated path to each suggestion's color. None disables API colors.
     key:
         Optional Streamlit component key.
     """
@@ -276,13 +418,18 @@ def sortable_multiselect(
         raise TypeError("show_move_buttons must be a bool.")
     if not isinstance(show_numbers, bool):
         raise TypeError("show_numbers must be a bool.")
-    if base_color is not None and not isinstance(base_color, str):
-        raise TypeError("base_color must be a string or None.")
 
+    base_color_value = None if base_color is None else _require_color("base_color", base_color)
+    tooltip_color_value = (
+        None if tooltip_color is None else _require_color("tooltip_color", tooltip_color)
+    )
     option_items = _normalize_options(options)
     option_values = [option["value"] for option in option_items]
     default_values = _validate_string_sequence("default", default)
     order_color_values = _validate_order_colors(order_colors)
+    value_color_values = _validate_value_colors(value_colors)
+    color_palette_values = _validate_color_palette(color_palette)
+    color_priority_values = _validate_color_priority(color_priority)
     max_selection_count = _validate_max_selections(max_selections)
     icon_size_value = _validate_icon_size(icon_size)
     options_max_height_value = _validate_options_max_height(options_max_height)
@@ -300,6 +447,9 @@ def sortable_multiselect(
     )
     suggestions_icon_url_path_value = _validate_optional_non_empty_string(
         "suggestions_icon_url_path", suggestions_icon_url_path
+    )
+    suggestions_color_path_value = _validate_optional_non_empty_string(
+        "suggestions_color_path", suggestions_color_path
     )
     suggestions_headers_value = _normalize_suggestions_headers(suggestions_headers)
     suggestions_min_chars_value = _validate_non_negative_int(
@@ -351,8 +501,12 @@ def sortable_multiselect(
         disabled=disabled,
         show_move_buttons=show_move_buttons,
         show_numbers=show_numbers,
-        base_color=base_color,
+        base_color=base_color_value,
         order_colors=order_color_values,
+        value_colors=value_color_values,
+        color_palette=color_palette_values,
+        color_priority=color_priority_values,
+        tooltip_color=tooltip_color_value,
         max_selections=max_selection_count,
         max_selections_placeholder=max_selections_placeholder,
         empty_message=empty_message,
@@ -366,6 +520,7 @@ def sortable_multiselect(
         suggestions_label_path=suggestions_label_path_value,
         suggestions_value_path=suggestions_value_path_value,
         suggestions_icon_url_path=suggestions_icon_url_path_value,
+        suggestions_color_path=suggestions_color_path_value,
         suggestions_headers=suggestions_headers_value,
         suggestions_min_chars=suggestions_min_chars_value,
         suggestions_debounce_ms=suggestions_debounce_ms_value,
