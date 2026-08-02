@@ -122,9 +122,10 @@ def _normalize_options(
         }
         # Omitted rather than sent as null: with tens of thousands of options this
         # key alone is a fifth of the payload the browser has to receive.
-        raw_color = option.get("color")
-        if raw_color is not None:
-            normalized_option["color"] = _require_color(f"option color for {value!r}", raw_color)
+        if "color" in option:
+            normalized_option["color"] = _require_color(
+                f"option color for {value!r}", option["color"]
+            )
         normalized_options.append(normalized_option)
 
     return normalized_options
