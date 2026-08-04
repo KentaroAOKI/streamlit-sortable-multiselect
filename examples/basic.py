@@ -24,6 +24,35 @@ st.write("Selected order:", selected)
 
 
 selected = sortable_multiselect(
+    "Primary language",
+    options=[
+        {
+            "label": "Python",
+            "value": "python",
+            "icon_url": "https://www.python.org/static/favicon.ico",
+            "color": "#dbeafe",
+        },
+        {
+            "label": "TypeScript",
+            "value": "typescript",
+            "icon_url": "https://www.typescriptlang.org/favicon-32x32.png",
+            "color": "#e0f2fe",
+        },
+        {"label": "Rust", "value": "rust", "color": "#ffedd5"},
+        {"label": "Go", "value": "go", "color": "#cffafe"},
+    ],
+    default=["python"],
+    placeholder="Search for a replacement...",
+    max_selections=1,
+    single_select_display=True,
+    icon_size=24,
+    key="primary_language",
+)
+
+st.write("Selected value:", selected)
+
+
+selected = sortable_multiselect(
     "Languages",
     options=[
         {"label": "Python", "value": "python", "icon_url": "https://www.python.org/static/favicon.ico"},

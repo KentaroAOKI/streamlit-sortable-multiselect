@@ -67,6 +67,7 @@ type Args = {
   color_priority?: string[];
   tooltip_color?: ColorValue;
   max_selections?: number | null;
+  single_select_display?: boolean;
   max_selections_placeholder?: string;
   empty_message?: string;
   no_options_placeholder?: string;
@@ -102,8 +103,8 @@ type SortableItemProps = {
 };
 
 type ItemStyle = {
-  transform: string | undefined;
-  transition: string | undefined;
+  transform?: string;
+  transition?: string;
   "--item-bg"?: string;
   "--item-fg"?: string;
   "--item-muted-fg"?: string;
@@ -735,6 +736,8 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
     typeof componentArgs.max_selections === "number" && componentArgs.max_selections >= 0
       ? componentArgs.max_selections
       : null;
+  const singleSelectDisplay =
+    componentArgs.single_select_display === true && maxSelections === 1;
   const defaultSelection = useMemo(
     () => normalizeSelection(componentArgs.default_selected, options, maxSelections),
     [componentArgs.default_selected, options, maxSelections],
@@ -797,7 +800,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
   });
 
   const selectionLimitReached = maxSelections !== null && selected.length >= maxSelections;
-  const canAddOptions = !disabled && !selectionLimitReached;
+  const canAddOptions = !disabled && (!selectionLimitReached || singleSelectDisplay);
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   // Lowercase labels once per options change, not on every keystroke/render.
   const searchIndex = useMemo(
@@ -952,6 +955,22 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
       return;
     }
     const selectedOption = candidateByValue.get(value);
+    if (singleSelectDisplay) {
+      setSelectedRemoteOptions(() => {
+        const next = new Map<string, OptionItem>();
+        if (selectedOption && !optionByValue.has(value)) {
+          next.set(value, selectedOption);
+        }
+        return next;
+      });
+      setSelected([value]);
+      setQuery("");
+      setIsOpen(false);
+      window.setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 0);
+      return;
+    }
     if (selectedOption && !optionByValue.has(value)) {
       setSelectedRemoteOptions((current) => {
         const next = new Map(current);
@@ -1076,6 +1095,23 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
     </DndContext>
   );
 
+  const inlineSelectedOption = selected[0]
+    ? optionByValue.get(selected[0]) ??
+      selectedRemoteOptions.get(selected[0]) ??
+      { label: selected[0], value: selected[0], icon_url: null }
+    : null;
+  const inlineSelectedColors = inlineSelectedOption
+    ? resolveItemColors(inlineSelectedOption, 0, 1, itemColorConfig)
+    : {};
+  const inlineSelectedTextColor =
+    inlineSelectedColors.text ?? getReadableTextColor(inlineSelectedColors.background);
+  const inlineSelectedStyle: ItemStyle = {
+    "--item-bg": inlineSelectedColors.background,
+    "--item-fg": inlineSelectedTextColor,
+    "--item-muted-fg": inlineSelectedTextColor,
+    "--item-border": inlineSelectedColors.border,
+  };
+
   return (
     <TooltipContext.Provider value={tooltipController}>
     <div
@@ -1110,11 +1146,50 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
         </div>
       ) : null}
       {label ? <label className="component-label">{label}</label> : null}
-      {selectedPosition === "top" ? selectedItems : null}
-      <div className="search-combobox">
+      {!singleSelectDisplay && selectedPosition === "top" ? selectedItems : null}
+      <div
+        className={`search-combobox${singleSelectDisplay ? " single-select-control" : ""}`}
+        onMouseDown={(event) => {
+          if (
+            !singleSelectDisplay ||
+            disabled ||
+            event.target === searchInputRef.current ||
+            event.target instanceof HTMLButtonElement
+          ) {
+            return;
+          }
+          event.preventDefault();
+          searchInputRef.current?.focus();
+          setIsOpen(true);
+        }}
+      >
+        {singleSelectDisplay && inlineSelectedOption ? (
+          <span className="single-selected-item" style={inlineSelectedStyle}>
+            {showNumbers ? <span className="single-selected-number">1</span> : null}
+            {inlineSelectedOption.icon_url ? (
+              <img
+                className="item-icon"
+                src={inlineSelectedOption.icon_url}
+                alt=""
+                aria-hidden="true"
+              />
+            ) : null}
+            <TruncatedLabel className="single-selected-label" text={inlineSelectedOption.label} />
+            <button
+              type="button"
+              className="single-selected-remove"
+              aria-label={`Remove ${inlineSelectedOption.label}`}
+              disabled={disabled}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => removeValue(inlineSelectedOption.value)}
+            >
+              ×
+            </button>
+          </span>
+        ) : null}
         <input
           ref={searchInputRef}
-          className="search-input"
+          className={`search-input${singleSelectDisplay ? " single-select-input" : ""}`}
           type="text"
           role="combobox"
           aria-autocomplete="list"
@@ -1128,7 +1203,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
           aria-label={label ? `Search and add item to ${label}` : "Search and add item"}
           disabled={!canSearch}
           placeholder={
-            selectionLimitReached
+            selectionLimitReached && !singleSelectDisplay
               ? maxSelectionsPlaceholder
               : suggestionsEnabled || hasStaticOptions
                 ? placeholder
@@ -1185,7 +1260,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
         ) : null}
       </div>
 
-      {selectedPosition === "bottom" ? selectedItems : null}
+      {!singleSelectDisplay && selectedPosition === "bottom" ? selectedItems : null}
     </div>
     </TooltipContext.Provider>
   );

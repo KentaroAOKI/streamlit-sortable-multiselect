@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 import streamlit.components.v1 as components
 
-__version__ = "0.7.6"
+__version__ = "0.7.7"
 __all__ = ["COLOR_FIELDS", "COLOR_SOURCES", "ColorValue", "sortable_multiselect"]
 
 _COMPONENT_NAME = "streamlit_sortable_multiselect"
@@ -296,6 +296,7 @@ def sortable_multiselect(
     base_color: ColorValue | None = None,
     order_colors: Mapping[int, ColorValue] | None = None,
     max_selections: int | None = None,
+    single_select_display: bool = False,
     max_selections_placeholder: str = "Selection limit reached",
     empty_message: str = "No items selected",
     no_options_placeholder: str = "No more options",
@@ -347,6 +348,9 @@ def sortable_multiselect(
         the top (1 is first), negative keys count from the bottom (-1 is last).
     max_selections:
         Maximum number of selected items. None means no limit.
+    single_select_display:
+        Display the selected item inside the search control and replace it when
+        another option is selected. Requires max_selections=1.
     max_selections_placeholder:
         Placeholder text shown when the maximum selection count is reached.
     empty_message:
@@ -418,6 +422,8 @@ def sortable_multiselect(
         raise TypeError("show_move_buttons must be a bool.")
     if not isinstance(show_numbers, bool):
         raise TypeError("show_numbers must be a bool.")
+    if not isinstance(single_select_display, bool):
+        raise TypeError("single_select_display must be a bool.")
 
     base_color_value = None if base_color is None else _require_color("base_color", base_color)
     tooltip_color_value = (
@@ -431,6 +437,8 @@ def sortable_multiselect(
     color_palette_values = _validate_color_palette(color_palette)
     color_priority_values = _validate_color_priority(color_priority)
     max_selection_count = _validate_max_selections(max_selections)
+    if single_select_display and max_selection_count != 1:
+        raise ValueError("single_select_display requires max_selections=1.")
     icon_size_value = _validate_icon_size(icon_size)
     options_max_height_value = _validate_options_max_height(options_max_height)
     suggestions_api_url_value = _validate_suggestions_api_url(suggestions_api_url)
@@ -508,6 +516,7 @@ def sortable_multiselect(
         color_priority=color_priority_values,
         tooltip_color=tooltip_color_value,
         max_selections=max_selection_count,
+        single_select_display=single_select_display,
         max_selections_placeholder=max_selections_placeholder,
         empty_message=empty_message,
         no_options_placeholder=no_options_placeholder,

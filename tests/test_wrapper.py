@@ -6,7 +6,7 @@ import streamlit_sortable_multiselect as sms
 
 
 def test_version_matches_package_metadata():
-    assert sms.__version__ == "0.7.6"
+    assert sms.__version__ == "0.7.7"
 
 
 def test_returns_default_when_component_has_no_value(monkeypatch):
@@ -103,6 +103,27 @@ def test_returns_component_value(monkeypatch):
     result = sms.sortable_multiselect("Items", options=["a", "b", "c"])
 
     assert result == ["c", "a"]
+
+
+def test_forwards_single_select_display(monkeypatch):
+    calls = []
+
+    def fake_component(**kwargs):
+        calls.append(kwargs)
+        return None
+
+    monkeypatch.setattr(sms, "_component_func", fake_component)
+
+    result = sms.sortable_multiselect(
+        "Items",
+        options=["a", "b"],
+        default=["a"],
+        max_selections=1,
+        single_select_display=True,
+    )
+
+    assert result == ["a"]
+    assert calls[0]["single_select_display"] is True
 
 
 def test_accepts_label_value_icon_options(monkeypatch):
@@ -260,6 +281,7 @@ def test_accepts_negative_order_color_positions(monkeypatch):
         ({"label": "Items", "options": ["a"], "tooltip_color": 1}, TypeError),
         ({"label": "Items", "options": ["a"], "max_selections": True}, TypeError),
         ({"label": "Items", "options": ["a"], "max_selections": 1.5}, TypeError),
+        ({"label": "Items", "options": ["a"], "single_select_display": "yes"}, TypeError),
         ({"label": "Items", "options": ["a"], "order_colors": {0: "red"}}, ValueError),
         ({"label": "Items", "options": ["a"], "base_color": ""}, ValueError),
         ({"label": "Items", "options": ["a"], "base_color": {"backgrond": "red"}}, ValueError),
@@ -285,6 +307,16 @@ def test_accepts_negative_order_color_positions(monkeypatch):
         ({"label": "Items", "options": ["a"], "default": ["b"]}, ValueError),
         ({"label": "Items", "options": ["a", "b"], "default": ["a", "a"]}, ValueError),
         ({"label": "Items", "options": ["a"], "max_selections": -1}, ValueError),
+        ({"label": "Items", "options": ["a"], "single_select_display": True}, ValueError),
+        (
+            {
+                "label": "Items",
+                "options": ["a", "b"],
+                "max_selections": 2,
+                "single_select_display": True,
+            },
+            ValueError,
+        ),
         ({"label": "Items", "options": ["a"], "selected_position": "left"}, ValueError),
         ({"label": "Items", "options": ["a"], "icon_size": 0}, ValueError),
         ({"label": "Items", "options": ["a"], "options_max_height": 0}, ValueError),
@@ -322,6 +354,7 @@ def test_allows_zero_max_selections(monkeypatch):
 
     assert result == []
     assert calls[0]["max_selections"] == 0
+    assert calls[0]["single_select_display"] is False
     assert calls[0]["base_color"] is None
     assert calls[0]["order_colors"] == {}
     assert calls[0]["value_colors"] == {}
