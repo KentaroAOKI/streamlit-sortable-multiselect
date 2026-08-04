@@ -80,7 +80,8 @@ st.write(selected)
 | `color_priority` | `Sequence[str] \| None` | `None` | Ranking of the color sources `"value"`, `"option"`, `"order"`, `"palette"`, and `"base"`. Omitted sources keep their default rank. |
 | `tooltip_color` | `str \| Mapping[str, str] \| None` | `None` | Color of the tooltip shown for labels that do not fit. `None` uses the built-in dark tooltip. See [Labels](#labels). |
 | `max_selections` | `int \| None` | `None` | Maximum number of selected items. `None` means no limit. Use `0` to prevent any selections. |
-| `max_selections_placeholder` | `str` | `"Selection limit reached"` | Placeholder shown when `max_selections` has been reached. This takes precedence over `placeholder` and `no_options_placeholder`. |
+| `single_select_display` | `bool` | `False` | With `max_selections=1`, displays the selected item inside the search control and replaces it when another option is selected. |
+| `max_selections_placeholder` | `str` | `"Selection limit reached"` | Placeholder shown when `max_selections` has been reached. This takes precedence over `placeholder` and `no_options_placeholder`, except in single-selection display mode. |
 | `empty_message` | `str` | `"No items selected"` | Message shown where the selected list appears when no items are selected. |
 | `no_options_placeholder` | `str` | `"No more options"` | Placeholder shown when every option is already selected and there are no more options to add. |
 | `selected_position` | `str` | `"bottom"` | Position of the selected item list relative to the search/add input. Use `"bottom"` or `"top"`. |
@@ -203,6 +204,33 @@ picks up both the background and the border, so it stays attached either way.
 
 `examples/tooltip_labels.py` shows the same options in a narrow list and a wide one,
 so the conditional behavior is visible side by side.
+
+## Single Selection Display
+
+Set `single_select_display=True` together with `max_selections=1` to keep the selected
+item inside the search control. The external selected-item list is not rendered in this
+mode. The item keeps its label, icon, resolved colors, optional number, and truncated
+label tooltip. Because no external selected list is rendered, `selected_position`,
+`empty_message`, and `show_move_buttons` do not affect this mode.
+
+```python
+selected = sortable_multiselect(
+    "Primary language",
+    options=[
+        {"label": "Python", "value": "python", "icon_url": "https://www.python.org/static/favicon.ico"},
+        {"label": "TypeScript", "value": "typescript"},
+        {"label": "Rust", "value": "rust"},
+    ],
+    default=["python"],
+    max_selections=1,
+    single_select_display=True,
+)
+```
+
+The input remains available after a selection. Opening the choices and selecting a new
+option replaces the current value instead of adding another one. Use the remove button
+inside the selected item to clear it. `single_select_display=True` without
+`max_selections=1` raises `ValueError`.
 
 ## API Suggestions
 

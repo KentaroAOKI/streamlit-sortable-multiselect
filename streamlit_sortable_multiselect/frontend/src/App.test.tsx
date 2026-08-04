@@ -399,6 +399,51 @@ describe("SortableMultiselect", () => {
     );
   });
 
+  it("replaces an inline API selection and keeps the latest option metadata", async () => {
+    const fetchMock = vi.fn().mockImplementation(async (requestUrl: string) => {
+      const query = new URL(requestUrl).searchParams.get("q");
+      return {
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue(
+          query === "py"
+            ? [{ label: "Python", value: "python", icon_url: "https://example.com/python.png" }]
+            : [{ label: "Rust", value: "rust", icon_url: "https://example.com/rust.png" }],
+        ),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = renderComponent({
+      options: [],
+      default_selected: [],
+      max_selections: 1,
+      single_select_display: true,
+      suggestions_api_url: "https://api.example.com/suggest",
+      suggestions_debounce_ms: 0,
+    });
+
+    const input = screen.getByLabelText("Search and add item to Items");
+    fireEvent.change(input, { target: { value: "py" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Python" }));
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["python"]);
+    });
+
+    fireEvent.change(input, { target: { value: "ru" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Rust" }));
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["rust"]);
+    });
+
+    expect(screen.getByText("Rust")).toBeInTheDocument();
+    expect(screen.queryByText("Python")).not.toBeInTheDocument();
+    expect(container.querySelector(".single-selected-item .item-icon")).toHaveAttribute(
+      "src",
+      "https://example.com/rust.png",
+    );
+  });
+
   it("aborts an in-flight request when the query changes", async () => {
     const fetchMock = vi.fn().mockImplementation((requestUrl: string) => {
       const query = new URL(requestUrl).searchParams.get("q");
@@ -1033,6 +1078,89 @@ describe("SortableMultiselect", () => {
     renderComponent({ default_selected: [] });
 
     expect(screen.getByText("No items selected")).toBeInTheDocument();
+  });
+
+  it("keeps the external selected list for max one unless inline display is enabled", () => {
+    renderComponent({ default_selected: ["Beta"], max_selections: 1 });
+
+    expect(screen.getByRole("list", { name: "Selected items" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Search and add item to Items")).toBeDisabled();
+  });
+
+  it("renders a styled selected item inside the control without an external list", () => {
+    const { container } = renderComponent({
+      options: [
+        {
+          label: "Beta language with a long label",
+          value: "beta",
+          icon_url: "https://example.com/beta.png",
+        },
+        { label: "Alpha", value: "alpha" },
+      ],
+      default_selected: ["beta"],
+      max_selections: 1,
+      single_select_display: true,
+      selected_position: "top",
+      show_numbers: true,
+      base_color: { background: "#112233", text: "#ffffff", border: "#445566" },
+    });
+
+    expect(screen.queryByRole("list", { name: "Selected items" })).not.toBeInTheDocument();
+    expect(screen.queryByText("No items selected")).not.toBeInTheDocument();
+    expect(screen.getByText("Beta language with a long label")).toBeInTheDocument();
+    expect(screen.getByText("1")).toBeInTheDocument();
+    expect(container.querySelector(".single-selected-item")).toHaveStyle({
+      "--item-bg": "#112233",
+      "--item-fg": "#ffffff",
+      "--item-border": "#445566",
+    });
+    expect(container.querySelector(".item-icon")).toHaveAttribute(
+      "src",
+      "https://example.com/beta.png",
+    );
+  });
+
+  it("opens from the inline value and replaces the selected item", async () => {
+    renderComponent({
+      default_selected: ["Beta"],
+      max_selections: 1,
+      single_select_display: true,
+    });
+
+    const input = screen.getByLabelText("Search and add item to Items");
+    expect(input).not.toBeDisabled();
+    fireEvent.mouseDown(screen.getByText("Beta"));
+    fireEvent.click(screen.getByRole("option", { name: "Alpha" }));
+
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["Alpha"]);
+    });
+    expect(screen.getByText("Alpha")).toBeInTheDocument();
+    expect(screen.queryByText("Beta")).not.toBeInTheDocument();
+  });
+
+  it("clears the inline selection and keeps removal disabled when disabled", async () => {
+    const { unmount } = renderComponent({
+      default_selected: ["Beta"],
+      max_selections: 1,
+      single_select_display: true,
+    });
+
+    fireEvent.click(screen.getByLabelText("Remove Beta"));
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith([]);
+    });
+    expect(screen.queryByText("No items selected")).not.toBeInTheDocument();
+
+    unmount();
+    renderComponent({
+      default_selected: ["Beta"],
+      max_selections: 1,
+      single_select_display: true,
+      disabled: true,
+    });
+    expect(screen.getByLabelText("Search and add item to Items")).toBeDisabled();
+    expect(screen.getByLabelText("Remove Beta")).toBeDisabled();
   });
 
   it("disables adding options when the selection limit is reached", async () => {
