@@ -742,6 +742,9 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
     () => normalizeSelection(componentArgs.default_selected, options, maxSelections),
     [componentArgs.default_selected, options, maxSelections],
   );
+  const previousDefaultValuesRef = useRef<string[]>([
+    ...(componentArgs.default_selected ?? []),
+  ]);
   const [selected, setSelected] = useState<string[]>(defaultSelection);
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -776,6 +779,19 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
+
+  useEffect(() => {
+    const defaultValues = componentArgs.default_selected ?? [];
+    if (selectionsEqual(previousDefaultValuesRef.current, defaultValues)) {
+      return;
+    }
+
+    previousDefaultValuesRef.current = [...defaultValues];
+    setSelected(defaultSelection);
+    setSelectedRemoteOptions(new Map());
+    setQuery("");
+    setIsOpen(false);
+  }, [componentArgs.default_selected, defaultSelection]);
 
   useEffect(() => {
     setSelected((current) => {

@@ -18,8 +18,8 @@ vi.mock("streamlit-component-lib", async () => {
   };
 });
 
-function renderComponent(args = {}) {
-  return render(
+function componentWithArgs(args = {}) {
+  return (
     <SortableMultiselect
       args={{
         label: "Items",
@@ -32,8 +32,12 @@ function renderComponent(args = {}) {
       disabled={false}
       theme={undefined}
       width={640}
-    />,
+    />
   );
+}
+
+function renderComponent(args = {}) {
+  return render(componentWithArgs(args));
 }
 
 // jsdom reports every box as 0x0, so clipping has to be stubbed to be observable.
@@ -1062,7 +1066,8 @@ describe("SortableMultiselect", () => {
   });
 
   it("allows removing all selected items without restoring defaults", async () => {
-    renderComponent({ default_selected: ["Alpha"], empty_message: "Nothing selected yet" });
+    const args = { default_selected: ["Alpha"], empty_message: "Nothing selected yet" };
+    const { rerender } = renderComponent(args);
 
     fireEvent.click(screen.getByLabelText("Remove Alpha"));
 
@@ -1072,6 +1077,43 @@ describe("SortableMultiselect", () => {
 
     expect(screen.queryByText("Alpha")).not.toBeInTheDocument();
     expect(screen.getByText("Nothing selected yet")).toBeInTheDocument();
+
+    rerender(componentWithArgs({ ...args, default_selected: ["Alpha"] }));
+
+    expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith([]);
+    expect(screen.queryByText("Alpha")).not.toBeInTheDocument();
+    expect(screen.getByText("Nothing selected yet")).toBeInTheDocument();
+  });
+
+  it("replaces the current selection when default values or order change", async () => {
+    const { rerender } = renderComponent({ default_selected: ["Alpha", "Beta"] });
+
+    rerender(componentWithArgs({ default_selected: ["Beta", "Alpha"] }));
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["Beta", "Alpha"]);
+    });
+
+    rerender(componentWithArgs({ default_selected: [] }));
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith([]);
+    });
+    expect(screen.getByText("No items selected")).toBeInTheDocument();
+  });
+
+  it("preserves user selections when an equivalent default is resent", async () => {
+    const { rerender } = renderComponent({ default_selected: ["Alpha"] });
+
+    fireEvent.focus(screen.getByLabelText("Search and add item to Items"));
+    fireEvent.click(screen.getByRole("option", { name: "Beta" }));
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["Alpha", "Beta"]);
+    });
+
+    rerender(componentWithArgs({ default_selected: ["Alpha"] }));
+
+    expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["Alpha", "Beta"]);
+    expect(screen.getByText("Alpha")).toBeInTheDocument();
+    expect(screen.getByText("Beta")).toBeInTheDocument();
   });
 
   it("shows the default empty message when no custom message is configured", () => {
@@ -1136,6 +1178,28 @@ describe("SortableMultiselect", () => {
       expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["Alpha"]);
     });
     expect(screen.getByText("Alpha")).toBeInTheDocument();
+    expect(screen.queryByText("Beta")).not.toBeInTheDocument();
+  });
+
+  it("updates an inline selection when the default changes", async () => {
+    const { rerender } = renderComponent({
+      default_selected: ["Beta"],
+      max_selections: 1,
+      single_select_display: true,
+    });
+
+    rerender(
+      componentWithArgs({
+        default_selected: ["Gamma"],
+        max_selections: 1,
+        single_select_display: true,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["Gamma"]);
+    });
+    expect(screen.getByText("Gamma")).toBeInTheDocument();
     expect(screen.queryByText("Beta")).not.toBeInTheDocument();
   });
 
