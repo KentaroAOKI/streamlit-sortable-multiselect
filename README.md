@@ -68,7 +68,7 @@ st.write(selected)
 | --- | --- | --- | --- |
 | `label` | `str` | required | Label displayed above the component. |
 | `options` | `Sequence[str \| Mapping[str, Any]]` | required | Available options. Each option can be a plain string, or a dictionary with `label`, `value`, and optional `icon_url`. Option values must be unique. |
-| `default` | `Sequence[str] \| None` | `None` | Initially selected values, in the initial order. Values must exist in `options` and must not contain duplicates. |
+| `default` | `Sequence[str] \| None` | `None` | Initially selected values, in the initial order. Changing the values or their order replaces the current selection. Values must exist in `options` and must not contain duplicates. |
 | `placeholder` | `str` | `"Select..."` | Placeholder shown in the search/add input when options are available. |
 | `disabled` | `bool` | `False` | Disables searching, selecting, removing, dragging, and move buttons. |
 | `show_move_buttons` | `bool` | `True` | Shows up/down buttons on selected items. Drag sorting remains available unless `disabled=True`. |
