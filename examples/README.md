@@ -20,16 +20,16 @@ their current order.
 
 File: [`basic.py`](basic.py)
 
-This app renders five sortable multiselect components.
+This app renders six sortable multiselect components.
 
-The first component demonstrates the minimal string-based API:
+The first two components demonstrate form-driven defaults:
 
 - options provided as plain strings
-- initial selections provided with `default`
-- default search, selection, removal, drag, and move-button behavior
-- selected strings returned in display order
+- a source selection submitted through `st.form`
+- a single-select component initialized from the submitted value
+- `default_revision` reapplies the same default on every form submission
 
-The second component demonstrates structured options and visual settings:
+The third component demonstrates structured options and visual settings:
 
 - a single selected item displayed inside the search control
 - direct replacement while keeping `max_selections=1`

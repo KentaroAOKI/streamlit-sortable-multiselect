@@ -50,6 +50,7 @@ def test_returns_default_when_component_has_no_value(monkeypatch):
         suggestions_loading_message="Searching...",
         suggestions_error_message="Search failed",
         key="items",
+        default_revision="reset-1",
     )
 
     assert result == ["b", "a"]
@@ -95,6 +96,7 @@ def test_returns_default_when_component_has_no_value(monkeypatch):
     assert calls[0]["suggestions_loading_message"] == "Searching..."
     assert calls[0]["suggestions_error_message"] == "Search failed"
     assert calls[0]["key"] == "items"
+    assert calls[0]["default_revision"] == "reset-1"
 
 
 def test_returns_component_value(monkeypatch):
@@ -282,6 +284,8 @@ def test_accepts_negative_order_color_positions(monkeypatch):
         ({"label": "Items", "options": ["a"], "max_selections": True}, TypeError),
         ({"label": "Items", "options": ["a"], "max_selections": 1.5}, TypeError),
         ({"label": "Items", "options": ["a"], "single_select_display": "yes"}, TypeError),
+        ({"label": "Items", "options": ["a"], "default_revision": True}, TypeError),
+        ({"label": "Items", "options": ["a"], "default_revision": 1.5}, TypeError),
         ({"label": "Items", "options": ["a"], "order_colors": {0: "red"}}, ValueError),
         ({"label": "Items", "options": ["a"], "base_color": ""}, ValueError),
         ({"label": "Items", "options": ["a"], "base_color": {"backgrond": "red"}}, ValueError),
