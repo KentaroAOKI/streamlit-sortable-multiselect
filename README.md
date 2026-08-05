@@ -69,6 +69,7 @@ st.write(selected)
 | `label` | `str` | required | Label displayed above the component. |
 | `options` | `Sequence[str \| Mapping[str, Any]]` | required | Available options. Each option can be a plain string, or a dictionary with `label`, `value`, and optional `icon_url`. Option values must be unique. |
 | `default` | `Sequence[str] \| None` | `None` | Initially selected values, in the initial order. Changing the values or their order replaces the current selection. Values must exist in `options` and must not contain duplicates. |
+| `default_revision` | `str \| int \| None` | `None` | Change this value to reapply `default` when its values and order are unchanged. |
 | `placeholder` | `str` | `"Select..."` | Placeholder shown in the search/add input when options are available. |
 | `disabled` | `bool` | `False` | Disables searching, selecting, removing, dragging, and move buttons. |
 | `show_move_buttons` | `bool` | `True` | Shows up/down buttons on selected items. Drag sorting remains available unless `disabled=True`. |
@@ -100,6 +101,24 @@ st.write(selected)
 | `suggestions_loading_message` | `str` | `"Loading suggestions..."` | Message shown while an API request is in progress. |
 | `suggestions_error_message` | `str` | `"Failed to load suggestions"` | Message shown when the request or response cannot be processed. |
 | `key` | `str \| None` | `None` | Optional Streamlit component key. Use this when rendering multiple sortable multiselects. |
+
+To reset a component to the same `default` after the user changes its selection,
+increment or otherwise change `default_revision`:
+
+```python
+if "reset_revision" not in st.session_state:
+    st.session_state.reset_revision = 0
+
+if st.button("Reset languages"):
+    st.session_state.reset_revision += 1
+
+selected = sortable_multiselect(
+    "Languages",
+    options=["Python", "TypeScript", "Rust"],
+    default=["Python"],
+    default_revision=st.session_state.reset_revision,
+)
+```
 
 Option dictionaries use this shape:
 

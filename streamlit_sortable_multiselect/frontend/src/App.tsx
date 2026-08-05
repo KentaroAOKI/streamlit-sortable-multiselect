@@ -86,6 +86,7 @@ type Args = {
   suggestions_debounce_ms?: number;
   suggestions_loading_message?: string;
   suggestions_error_message?: string;
+  default_revision?: string | number | null;
 };
 
 type SortableItemProps = {
@@ -745,6 +746,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
   const previousDefaultValuesRef = useRef<string[]>([
     ...(componentArgs.default_selected ?? []),
   ]);
+  const previousDefaultRevisionRef = useRef(componentArgs.default_revision ?? null);
   const [selected, setSelected] = useState<string[]>(defaultSelection);
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -782,16 +784,23 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
 
   useEffect(() => {
     const defaultValues = componentArgs.default_selected ?? [];
-    if (selectionsEqual(previousDefaultValuesRef.current, defaultValues)) {
+    const defaultRevision = componentArgs.default_revision ?? null;
+    const defaultValuesChanged = !selectionsEqual(
+      previousDefaultValuesRef.current,
+      defaultValues,
+    );
+    const defaultRevisionChanged = previousDefaultRevisionRef.current !== defaultRevision;
+    if (!defaultValuesChanged && !defaultRevisionChanged) {
       return;
     }
 
     previousDefaultValuesRef.current = [...defaultValues];
+    previousDefaultRevisionRef.current = defaultRevision;
     setSelected(defaultSelection);
     setSelectedRemoteOptions(new Map());
     setQuery("");
     setIsOpen(false);
-  }, [componentArgs.default_selected, defaultSelection]);
+  }, [componentArgs.default_selected, componentArgs.default_revision, defaultSelection]);
 
   useEffect(() => {
     setSelected((current) => {

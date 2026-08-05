@@ -20,32 +20,18 @@ their current order.
 
 File: [`basic.py`](basic.py)
 
-This app renders five sortable multiselect components.
+This app renders seven sortable multiselect components. Each example includes a
+visible description of the behavior and settings it demonstrates.
 
-The first component demonstrates the minimal string-based API:
+The examples cover:
 
-- options provided as plain strings
-- initial selections provided with `default`
-- default search, selection, removal, drag, and move-button behavior
-- selected strings returned in display order
-
-The second component demonstrates structured options and visual settings:
-
-- a single selected item displayed inside the search control
-- direct replacement while keeping `max_selections=1`
-- an inline remove button, icon, and item color
-
-The remaining components demonstrate structured options and visual settings:
-
-- separate `label` and `value` fields
-- option icons loaded from `icon_url`
-- selected items displayed above the search box
-- custom icon size, base color, and position-specific colors
-- hidden move buttons
-- a maximum of four selections
-- custom empty, limit, and no-options messages
-- custom dropdown height
-- position colors, option colors, palettes, and value colors
+- the basic string API and sortable selected order
+- inline single selection with structured options, icons, and option colors
+- selected-item placement, selection limits, messages, icon size, and dropdown height
+- position colors with explicit color priority
+- a repeating position palette combined with a value-specific highlight
+- a default source submitted through `st.form`
+- reapplying the same submitted default with `default_revision`
 
 Internet access is required to display the external icon images. The component
 continues to work if an icon cannot be loaded.

@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 import streamlit.components.v1 as components
 
-__version__ = "0.7.8"
+__version__ = "0.7.9"
 __all__ = ["COLOR_FIELDS", "COLOR_SOURCES", "ColorValue", "sortable_multiselect"]
 
 _COMPONENT_NAME = "streamlit_sortable_multiselect"
@@ -320,6 +320,7 @@ def sortable_multiselect(
     tooltip_color: ColorValue | None = None,
     suggestions_color_path: str | None = None,
     key: str | None = None,
+    default_revision: str | int | None = None,
 ) -> list[str]:
     """Select multiple string values and return them in user-defined order.
 
@@ -401,6 +402,8 @@ def sortable_multiselect(
         Optional dot-separated path to each suggestion's color. None disables API colors.
     key:
         Optional Streamlit component key.
+    default_revision:
+        Change this value to reapply default even when its values and order are unchanged.
     """
     if not isinstance(label, str):
         raise TypeError("label must be a string.")
@@ -424,6 +427,10 @@ def sortable_multiselect(
         raise TypeError("show_numbers must be a bool.")
     if not isinstance(single_select_display, bool):
         raise TypeError("single_select_display must be a bool.")
+    if default_revision is not None and (
+        isinstance(default_revision, bool) or not isinstance(default_revision, (str, int))
+    ):
+        raise TypeError("default_revision must be a string, an integer, or None.")
 
     base_color_value = None if base_color is None else _require_color("base_color", base_color)
     tooltip_color_value = (
@@ -535,6 +542,7 @@ def sortable_multiselect(
         suggestions_debounce_ms=suggestions_debounce_ms_value,
         suggestions_loading_message=suggestions_loading_message,
         suggestions_error_message=suggestions_error_message,
+        default_revision=default_revision,
         key=key,
         default=default_values,
     )
