@@ -23,7 +23,7 @@ selected_1st = sortable_multiselect(
     "Default languages",
     options=["Python", "TypeScript", "Rust", "Go", "Java", "Kotlin", "C#", "Swift", "PHP"],
     default=["Python", "TypeScript"],
-    key="simple_languages_1st",
+    key="simple_languages",
 )
 
 st.write("Selected order:", selected_1st)
@@ -167,7 +167,7 @@ with st.form("language_defaults"):
         "Default languages",
         options=["Python", "TypeScript", "Rust", "Go", "Java", "Kotlin", "C#", "Swift", "PHP"],
         default=["Python", "TypeScript"],
-        key="simple_languages_1st",
+        key="default_languages",
     )
     submitted = st.form_submit_button("Apply default")
 
@@ -186,7 +186,7 @@ selected_7th = sortable_multiselect(
     "Primary language from the form",
     options=["Python", "TypeScript", "Rust", "Go", "Java", "Kotlin", "C#", "Swift", "PHP"],
     default=selected_6th[:1],
-    key="simple_languages",
+    key="default_languages_from_form",
     max_selections=1,
     single_select_display=True,
     default_revision=st.session_state.form_default_revision,
