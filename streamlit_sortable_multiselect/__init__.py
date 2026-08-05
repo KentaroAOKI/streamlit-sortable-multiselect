@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 import streamlit.components.v1 as components
 
-__version__ = "0.7.8"
+__version__ = "0.7.9"
 __all__ = ["COLOR_FIELDS", "COLOR_SOURCES", "ColorValue", "sortable_multiselect"]
 
 _COMPONENT_NAME = "streamlit_sortable_multiselect"

@@ -6,7 +6,7 @@ import streamlit_sortable_multiselect as sms
 
 
 def test_version_matches_package_metadata():
-    assert sms.__version__ == "0.7.8"
+    assert sms.__version__ == "0.7.9"
 
 
 def test_returns_default_when_component_has_no_value(monkeypatch):
