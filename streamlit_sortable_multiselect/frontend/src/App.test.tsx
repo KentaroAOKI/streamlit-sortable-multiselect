@@ -1100,8 +1100,11 @@ describe("SortableMultiselect", () => {
     expect(screen.getByText("No items selected")).toBeInTheDocument();
   });
 
-  it("preserves user selections when an equivalent default is resent", async () => {
-    const { rerender } = renderComponent({ default_selected: ["Alpha"] });
+  it("preserves equivalent defaults until the default revision changes", async () => {
+    const { rerender } = renderComponent({
+      default_selected: ["Alpha"],
+      default_revision: 0,
+    });
 
     fireEvent.focus(screen.getByLabelText("Search and add item to Items"));
     fireEvent.click(screen.getByRole("option", { name: "Beta" }));
@@ -1109,11 +1112,19 @@ describe("SortableMultiselect", () => {
       expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["Alpha", "Beta"]);
     });
 
-    rerender(componentWithArgs({ default_selected: ["Alpha"] }));
+    rerender(componentWithArgs({ default_selected: ["Alpha"], default_revision: 0 }));
 
     expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["Alpha", "Beta"]);
     expect(screen.getByText("Alpha")).toBeInTheDocument();
     expect(screen.getByText("Beta")).toBeInTheDocument();
+
+    rerender(componentWithArgs({ default_selected: ["Alpha"], default_revision: 1 }));
+
+    await waitFor(() => {
+      expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["Alpha"]);
+    });
+    expect(screen.getByText("Alpha")).toBeInTheDocument();
+    expect(screen.queryByText("Beta")).not.toBeInTheDocument();
   });
 
   it("shows the default empty message when no custom message is configured", () => {

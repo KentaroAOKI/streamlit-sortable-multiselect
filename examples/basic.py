@@ -13,15 +13,34 @@ st.set_page_config(page_title="Sortable Multiselect", layout="centered")
 
 st.title("Sortable Multiselect")
 
+if "form_default_revision" not in st.session_state:
+    st.session_state.form_default_revision = 0
+
+with st.form("language_defaults"):
+    selected_1st = sortable_multiselect(
+        "Default languages",
+        options=["Python", "TypeScript", "Rust", "Go", "Java", "Kotlin", "C#", "Swift", "PHP"],
+        default=["Python", "TypeScript"],
+        key="simple_languages_1st",
+    )
+    submitted = st.form_submit_button("Apply default")
+
+if submitted:
+    st.session_state.form_default_revision += 1
+
+st.write("Submitted default order:", selected_1st)
+
 selected = sortable_multiselect(
-    "Languages",
-    options=["Python","TypeScript", "Rust", "Go", "Java", "Kotlin", "C#", "Swift", "PHP"],
-    default=["Python", "TypeScript"],
+    "Primary language from the form",
+    options=["Python", "TypeScript", "Rust", "Go", "Java", "Kotlin", "C#", "Swift", "PHP"],
+    default=selected_1st[:1],
     key="simple_languages",
+    max_selections=1,
+    single_select_display=True,
+    default_revision=st.session_state.form_default_revision,
 )
 
-st.write("Selected order:", selected)
-
+st.write("Selected value:", selected)
 
 selected = sortable_multiselect(
     "Primary language",
