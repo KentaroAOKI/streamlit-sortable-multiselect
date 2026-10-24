@@ -32,6 +32,8 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { CalendarLabels, CalendarPicker } from "./CalendarPicker";
+import { CalendarMode, calendarLabel, validCalendarValue } from "./calendar";
 import "./style.css";
 
 // Styleable parts of a selected item. Keep in sync with COLOR_FIELDS in the wrapper.
@@ -87,6 +89,11 @@ type Args = {
   suggestions_loading_message?: string;
   suggestions_error_message?: string;
   default_revision?: string | number | null;
+  input_mode?: "options" | CalendarMode;
+  min_value?: string | null;
+  max_value?: string | null;
+  calendar_labels?: CalendarLabels;
+  max_range_days?: number | null;
 };
 
 type SortableItemProps = {
@@ -383,6 +390,7 @@ function normalizeSelection(
   values: string[] | undefined,
   options: OptionItem[],
   maxSelections?: number | null,
+  calendarValid?: (value: string) => boolean,
 ): string[] {
   if (!Array.isArray(values)) {
     return [];
@@ -391,7 +399,7 @@ function normalizeSelection(
   const optionValues = new Set(options.map((option) => option.value));
   const seen = new Set<string>();
   const normalized = values.filter((value) => {
-    if (!optionValues.has(value) || seen.has(value)) {
+    if (!(calendarValid ? calendarValid(value) : optionValues.has(value)) || seen.has(value)) {
       return false;
     }
     seen.add(value);
@@ -642,6 +650,17 @@ function SortableItem({
 export function SortableMultiselect({ args, disabled: streamlitDisabled }: ComponentProps) {
   const componentArgs = args as Args;
   const label = componentArgs.label ?? "";
+  const inputMode = componentArgs.input_mode ?? "options";
+  const calendarMode = inputMode === "date" || inputMode === "month" || inputMode === "date_month"
+    ? inputMode : null;
+  const calendarValid = useMemo(
+    () => calendarMode
+      ? (value: string) => validCalendarValue(
+          value, calendarMode, componentArgs.min_value, componentArgs.max_value, componentArgs.max_range_days,
+        )
+      : undefined,
+    [calendarMode, componentArgs.min_value, componentArgs.max_value, componentArgs.max_range_days],
+  );
   const options = useMemo(() => normalizeOptions(componentArgs.options), [componentArgs.options]);
   const optionByValue = useMemo(
     () => new Map(options.map((option) => [option.value, option])),
@@ -662,7 +681,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
       ? componentArgs.options_max_height
       : 190;
   const suggestionsApiUrl = componentArgs.suggestions_api_url ?? null;
-  const suggestionsEnabled = Boolean(suggestionsApiUrl);
+  const suggestionsEnabled = !calendarMode && Boolean(suggestionsApiUrl);
   const suggestionsQueryParam = componentArgs.suggestions_query_param ?? "q";
   const suggestionsResponsePath = componentArgs.suggestions_response_path ?? "";
   const suggestionsLabelPath = componentArgs.suggestions_label_path ?? "label";
@@ -740,8 +759,8 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
   const singleSelectDisplay =
     componentArgs.single_select_display === true && maxSelections === 1;
   const defaultSelection = useMemo(
-    () => normalizeSelection(componentArgs.default_selected, options, maxSelections),
-    [componentArgs.default_selected, options, maxSelections],
+    () => normalizeSelection(componentArgs.default_selected, options, maxSelections, calendarValid),
+    [componentArgs.default_selected, options, maxSelections, calendarValid],
   );
   const previousDefaultValuesRef = useRef<string[]>([
     ...(componentArgs.default_selected ?? []),
@@ -808,10 +827,10 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
         ...options,
         ...Array.from(selectedRemoteOptions.values()),
       ];
-      const normalized = normalizeSelection(current, allowedOptions, maxSelections);
+      const normalized = normalizeSelection(current, allowedOptions, maxSelections, calendarValid);
       return selectionsEqual(current, normalized) ? current : normalized;
     });
-  }, [options, maxSelections, selectedRemoteOptions]);
+  }, [options, maxSelections, selectedRemoteOptions, calendarValid]);
 
   useEffect(() => {
     Streamlit.setComponentValue(selected);
@@ -1015,6 +1034,11 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
     }, 0);
   }
 
+  function addCalendarValue(value: string) {
+    if (!canAddOptions || !calendarValid?.(value) || selectedSet.has(value)) return;
+    setSelected((current) => singleSelectDisplay ? [value] : [...current, value]);
+  }
+
   function removeValue(value: string) {
     if (disabled) {
       return;
@@ -1097,7 +1121,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
             const option =
               optionByValue.get(item) ??
               selectedRemoteOptions.get(item) ??
-              { label: item, value: item, icon_url: null };
+              { label: calendarMode ? calendarLabel(item) : item, value: item, icon_url: null };
             return (
               <SortableItem
                 key={item}
@@ -1123,7 +1147,7 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
   const inlineSelectedOption = selected[0]
     ? optionByValue.get(selected[0]) ??
       selectedRemoteOptions.get(selected[0]) ??
-      { label: selected[0], value: selected[0], icon_url: null }
+      { label: calendarMode ? calendarLabel(selected[0]) : selected[0], value: selected[0], icon_url: null }
     : null;
   const inlineSelectedColors = inlineSelectedOption
     ? resolveItemColors(inlineSelectedOption, 0, 1, itemColorConfig)
@@ -1173,10 +1197,10 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
       {label ? <label className="component-label">{label}</label> : null}
       {!singleSelectDisplay && selectedPosition === "top" ? selectedItems : null}
       <div
-        className={`search-combobox${singleSelectDisplay ? " single-select-control" : ""}`}
+        className={`search-combobox${singleSelectDisplay ? " single-select-control" : ""}${calendarMode ? " calendar-control" : ""}`}
         onMouseDown={(event) => {
           if (
-            !singleSelectDisplay ||
+            !singleSelectDisplay || calendarMode ||
             disabled ||
             event.target === searchInputRef.current ||
             event.target instanceof HTMLButtonElement
@@ -1212,7 +1236,17 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
             </button>
           </span>
         ) : null}
-        <input
+        {calendarMode ? (
+          <>
+            <CalendarPicker mode={calendarMode} minimum={componentArgs.min_value}
+              maximum={componentArgs.max_value} disabled={!canAddOptions}
+              selected={selected} onAdd={addCalendarValue} labels={componentArgs.calendar_labels}
+              maxRangeDays={componentArgs.max_range_days} />
+            {selectionLimitReached && !singleSelectDisplay ? (
+              <div className="calendar-limit" role="status">{maxSelectionsPlaceholder}</div>
+            ) : null}
+          </>
+        ) : <input
           ref={searchInputRef}
           className={`search-input${singleSelectDisplay ? " single-select-input" : ""}`}
           type="text"
@@ -1242,8 +1276,8 @@ export function SortableMultiselect({ args, disabled: streamlitDisabled }: Compo
           onFocus={() => setIsOpen(true)}
           onBlur={() => setIsOpen(false)}
           onKeyDown={onSearchKeyDown}
-        />
-        {showOptionsPopover ? (
+        />}
+        {!calendarMode && showOptionsPopover ? (
           <div className="options-popover">
             {suggestionsStatus === "loading" ? (
               <div className="option-status" role="status">

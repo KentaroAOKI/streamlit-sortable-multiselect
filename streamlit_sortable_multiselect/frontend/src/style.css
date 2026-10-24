@@ -30,6 +30,162 @@ input {
   position: relative;
 }
 
+.calendar-control.single-select-control {
+  display: block;
+}
+
+.calendar-control > .single-selected-item {
+  margin-bottom: 8px;
+  max-width: 100%;
+}
+
+.calendar-picker {
+  min-width: 0;
+  width: 100%;
+}
+
+.calendar-modes,
+.calendar-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+}
+
+.calendar-modes {
+  margin-bottom: 8px;
+}
+
+.calendar-segments {
+  border: 0;
+  display: flex;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.calendar-segments label {
+  cursor: pointer;
+  position: relative;
+  min-width: 0;
+}
+
+.calendar-segments input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.calendar-segments span {
+  display: block;
+  padding: 5px 12px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  color: #31333f;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.calendar-segments label:first-of-type span {
+  border-radius: 4px 0 0 4px;
+}
+
+.calendar-segments label:last-of-type span {
+  border-radius: 0 4px 4px 0;
+}
+
+.calendar-segments input:checked + span {
+  background: #fce8e8;
+  border-color: #ff4b4b;
+  color: #852727;
+}
+
+.calendar-segments input:focus-visible + span {
+  outline: 2px solid #ff4b4b;
+  outline-offset: 2px;
+}
+
+.calendar-segments:disabled label {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.calendar-field {
+  display: flex;
+  flex: 1 1 170px;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  font-size: 14px;
+  color: #31333f;
+}
+
+.calendar-field input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #111827;
+}
+
+.calendar-field input:focus-visible,
+.calendar-add:focus-visible {
+  outline: 2px solid #ff4b4b;
+  outline-offset: 1px;
+}
+
+.calendar-add {
+  min-height: 38px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  padding: 6px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #31333f;
+  cursor: pointer;
+}
+
+.calendar-add:hover:not(:disabled) {
+  color: #c73838;
+  border-color: #ff4b4b;
+}
+
+.calendar-add:disabled,
+.calendar-field input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.calendar-error,
+.calendar-limit {
+  font-size: 14px;
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+}
+
+.calendar-error {
+  color: #b42318;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .search-input {
   box-sizing: border-box;
   width: 100%;

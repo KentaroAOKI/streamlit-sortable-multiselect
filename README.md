@@ -1,6 +1,8 @@
 # streamlit-sortable-multiselect
 
-A Streamlit custom component for searching, selecting, and reordering multiple string values.
+A Streamlit custom component for searching, selecting, and reordering options,
+dates, months, and date/month ranges. Selected items can be reordered by dragging
+or using move buttons, and are returned as an ordered `list[str]`.
 
 ## Install
 
@@ -29,6 +31,10 @@ npm run dev
 ```
 
 ## Usage
+
+The default `input_mode="options"` provides searchable options. For calendar
+inputs, see [Calendar Input](#calendar-input), including date ranges, single
+months, selection bounds, and Japanese labels and messages.
 
 ```python
 import streamlit as st
@@ -62,16 +68,22 @@ st.write(selected)
 
 ## Settings
 
-`sortable_multiselect` returns the selected option values as a `list[str]` in the current display order.
+`sortable_multiselect` returns selected values as a `list[str]` in the current
+display order. Calendar values use the formats in [Returned Values](#returned-values).
 
 | Argument | Type | Default | Description |
 | --- | --- | --- | --- |
 | `label` | `str` | required | Label displayed above the component. |
-| `options` | `Sequence[str \| Mapping[str, Any]]` | required | Available options. Each option can be a plain string, or a dictionary with `label`, `value`, and optional `icon_url`. Option values must be unique. |
-| `default` | `Sequence[str] \| None` | `None` | Initially selected values, in the initial order. Changing the values or their order replaces the current selection. Values must exist in `options` and must not contain duplicates. |
+| `options` | `Sequence[str \| Mapping[str, Any]]` | `()` | Available options. Each option can be a plain string, or a dictionary with `label`, `value`, and optional `icon_url` and `color`. Option values must be unique. In calendar modes, optional entries supply labels, icons, and colors for matching calendar values. |
+| `default` | `Sequence[str] \| None` | `None` | Initially selected values, in the initial order. Changing the values or their order replaces the current selection. In options mode, values must exist in `options`. Calendar defaults must match the mode and bounds. Duplicates are not allowed. |
 | `default_revision` | `str \| int \| None` | `None` | Change this value to reapply `default` when its values and order are unchanged. |
-| `placeholder` | `str` | `"Select..."` | Placeholder shown in the search/add input when options are available. |
-| `disabled` | `bool` | `False` | Disables searching, selecting, removing, dragging, and move buttons. |
+| `input_mode` | `str` | `"options"` | `"options"`, `"date"`, `"month"`, or `"date_month"`. Mixed mode offers one switch between date ranges and single months. Date-only and month-only modes offer Single/Range controls. |
+| `min_value` | `str \| datetime.date \| None` | `None` | Inclusive lower bound in calendar modes. Accepts `YYYY-MM-DD`, `YYYY-MM`, or a date object. |
+| `max_value` | `str \| datetime.date \| None` | `None` | Inclusive upper bound in calendar modes. Accepts `YYYY-MM-DD`, `YYYY-MM`, or a date object. |
+| `max_range_days` | `int \| None` | `None` | Maximum number of days in each date range, including start and end. Must be positive. `None` means unlimited. Does not limit single values or month ranges. Requires a calendar mode. |
+| `calendar_labels` | `Mapping[str, str] \| None` | `None` | Overrides calendar switches, the Add button, field labels, accessibility group names, and validation messages. See [Calendar Input](#calendar-input) for all keys. Unspecified entries retain their English defaults. |
+| `placeholder` | `str` | `"Select..."` | Placeholder shown in the search/add input when options are available. Used in options mode. |
+| `disabled` | `bool` | `False` | Disables searching, calendar inputs and switches, adding, removing, dragging, and move buttons. |
 | `show_move_buttons` | `bool` | `True` | Shows up/down buttons on selected items. Drag sorting remains available unless `disabled=True`. |
 | `show_numbers` | `bool` | `False` | Shows 1-based position numbers before selected item labels. |
 | `base_color` | `str \| Mapping[str, str] \| None` | `None` | Fallback color for every selected item. See [Colors](#colors). |
@@ -82,13 +94,13 @@ st.write(selected)
 | `tooltip_color` | `str \| Mapping[str, str] \| None` | `None` | Color of the tooltip shown for labels that do not fit. `None` uses the built-in dark tooltip. See [Labels](#labels). |
 | `max_selections` | `int \| None` | `None` | Maximum number of selected items. `None` means no limit. Use `0` to prevent any selections. |
 | `single_select_display` | `bool` | `False` | With `max_selections=1`, displays the selected item inside the search control and replaces it when another option is selected. |
-| `max_selections_placeholder` | `str` | `"Selection limit reached"` | Placeholder shown when `max_selections` has been reached. This takes precedence over `placeholder` and `no_options_placeholder`, except in single-selection display mode. |
+| `max_selections_placeholder` | `str` | `"Selection limit reached"` | Placeholder shown when `max_selections` has been reached in options mode; a status message in calendar modes. Takes precedence over other placeholders. Not shown in inline single-selection mode, which permits replacement. |
 | `empty_message` | `str` | `"No items selected"` | Message shown where the selected list appears when no items are selected. |
-| `no_options_placeholder` | `str` | `"No more options"` | Placeholder shown when every option is already selected and there are no more options to add. |
+| `no_options_placeholder` | `str` | `"No more options"` | Placeholder shown when every option is already selected and there are no more options to add. Used in options mode. |
 | `selected_position` | `str` | `"bottom"` | Position of the selected item list relative to the search/add input. Use `"bottom"` or `"top"`. |
 | `icon_size` | `int` | `20` | Icon display size in pixels for `icon_url` images. Images are displayed inside a square area while preserving their aspect ratio. |
-| `options_max_height` | `int` | `190` | Maximum height in pixels for the available options dropdown. |
-| `suggestions_api_url` | `str \| None` | `None` | Absolute HTTP(S) endpoint used to fetch suggestions in the browser. `None` disables API suggestions. |
+| `options_max_height` | `int` | `190` | Maximum height in pixels for the available options dropdown. Used in options mode. |
+| `suggestions_api_url` | `str \| None` | `None` | Absolute HTTP(S) endpoint used to fetch suggestions in the browser. `None` disables API suggestions. Only supported in options mode. |
 | `suggestions_query_param` | `str` | `"q"` | Query parameter name used to send the current search text. |
 | `suggestions_response_path` | `str` | `""` | Dot-separated path to the suggestions array in the JSON response. Empty means the response root. |
 | `suggestions_label_path` | `str` | `"label"` | Dot-separated path to each suggestion's display label. |
@@ -251,6 +263,182 @@ option replaces the current value instead of adding another one. Use the remove 
 inside the selected item to clear it. `single_select_display=True` without
 `max_selections=1` raises `ValueError`.
 
+In calendar modes, the selected item is displayed inside the calendar control.
+Adding another calendar value replaces it. A date range counts as one selected item.
+
+## Calendar Input
+
+### Input Modes
+
+`input_mode` selects the input method for the whole component:
+
+| Mode | Picker controls | Items added |
+| --- | --- | --- |
+| `"options"` (default) | Searchable dropdown and optional API suggestions | Values from options or API results |
+| `"date"` | Date input with a Single/Range switch | One date or one date range |
+| `"month"` | Month input with a Single/Range switch | One month or one month range |
+| `"date_month"` | One Date (range)/Month (single) switch | One date range or one month |
+
+Use `input_mode="date_month"` to add date ranges and single months to one sortable
+list. One switch selects Date (range) or Month (single). Date (range) shows Start
+and End inputs; Month (single) shows one month input. Press Add to append the
+selection. A range is one item, not an expanded sequence. Use `"date"` or `"month"`
+for a fixed precision with a separate Single/Range switch.
+
+```python
+import streamlit as st
+from streamlit_sortable_multiselect import sortable_multiselect
+
+selected = sortable_multiselect(
+    "Reporting periods",
+    input_mode="date_month",
+    min_value="2026-01-01",
+    max_value="2027-12-31",
+    max_range_days=31,
+    default=["2026-10-01/2026-10-24", "2026-11"],
+    show_numbers=True,
+    key="reporting_periods",
+)
+st.write("Selected order:", selected)
+```
+
+Mixed mode initially shows the date-range inputs. Switching to Month (single)
+clears unfinished inputs and keeps items already added to the sortable list.
+
+### Calendar Labels
+
+Override `calendar_labels` to display Japanese or another language. The settings
+apply to switch text, the Add button, field labels, accessibility group names,
+and validation messages. They do not change returned values. Supported keys and
+defaults are:
+
+| Key | Default | Used in |
+| --- | --- | --- |
+| `date_range` | `"Date (range)"` | `date_month` |
+| `month_single` | `"Month (single)"` | `date_month` |
+| `single` | `"Single"` | `date`, `month` |
+| `range` | `"Range"` | `date`, `month` |
+| `add` | `"Add"` | Add button |
+| `start` | `"Start"` | Range start field and its accessible name |
+| `end` | `"End"` | Range end field and its accessible name |
+| `date` | `"Date"` | Single-date field and its accessible name |
+| `month` | `"Month"` | Single-month field and its accessible name |
+| `calendar_input` | `"Calendar input"` | Accessible name of the mixed-mode switch group |
+| `selection_kind` | `"Selection kind"` | Accessible name of the Single/Range switch group |
+| `invalid_value` | `"Choose a valid value within the allowed range, with start on or before end."` | Invalid date, bounds, or reversed range |
+| `duplicate_value` | `"This item is already selected."` | Exact duplicate selection |
+| `incomplete_selection` | `"Complete the selection before adding it."` | Add or Enter with missing input |
+| `range_too_long` | `"Choose a date range of at most {max_range_days} days (including both endpoints)."` | Date range longer than `max_range_days` |
+
+Only specify the labels you want to override. Unknown keys, non-string values,
+and empty or whitespace-only labels raise an error. In `range_too_long`, every
+`{max_range_days}` placeholder is replaced with the configured limit; a message
+without the placeholder is also allowed. Native calendar localization follows
+the browser and operating system. Set `empty_message` for the empty selected
+list and `max_selections_placeholder` for the selection-count limit message.
+
+### Japanese Example
+
+```python
+import streamlit as st
+from streamlit_sortable_multiselect import sortable_multiselect
+
+selected = sortable_multiselect(
+    "Reporting periods",
+    input_mode="date_month",
+    min_value="2026-01-01",
+    max_value="2027-12-31",
+    max_range_days=31,
+    default=["2026-10-01/2026-10-24", "2026-11", "2027-01"],
+    show_numbers=True,
+    max_selections=8,
+    calendar_labels={
+        "date_range": "日付（範囲）",
+        "month_single": "年月（単一）",
+        "single": "単一",
+        "range": "範囲",
+        "add": "追加",
+        "start": "開始日",
+        "end": "終了日",
+        "date": "日付",
+        "month": "年月",
+        "calendar_input": "入力方法",
+        "selection_kind": "選択方法",
+        "invalid_value": "選択範囲を確認してください。",
+        "duplicate_value": "この項目は選択済みです。",
+        "incomplete_selection": "追加する値をすべて入力してください。",
+        "range_too_long": "{max_range_days}日以内で指定してください。",
+    },
+    empty_message="期間が選択されていません。",
+    max_selections_placeholder="選択数の上限に達しました。",
+    key="periods",
+)
+st.write(selected)
+```
+
+### Returned Values
+
+Across the calendar modes, the returned `list[str]` retains the selected order
+and identifies precision by format:
+
+| Selection | Returned value |
+| --- | --- |
+| Date | `"2026-10-24"` |
+| Month | `"2026-10"` |
+| Date range | `"2026-10-01/2026-10-31"` |
+| Month range | `"2026-10/2026-12"` |
+
+Ranges include both endpoints, require the same precision at each end, and must
+start on or before their end. Overlapping ranges are allowed; identical items
+cannot be added twice. Dates and months may coexist in mixed mode. Switching
+precision clears the unfinished input and preserves added items.
+
+### Bounds and Range Length
+
+Bounds are optional. A `YYYY-MM` lower bound expands to the first day of that
+month and an upper bound to its last day. Month selections compare by month:
+`min_value="2026-01-15"` still permits the month `"2026-01"`, while date selections
+must be on or after January 15. Changing bounds or input mode removes selected
+items that are no longer valid.
+
+Set `max_range_days=31` to allow at most 31 days in each date range. Both endpoints
+count: January 1 through January 31 is 31 days; January 1 through February 1 is
+32 days and cannot be added. `max_range_days=1` allows only same-day date ranges.
+The end picker uses the earlier of `max_value` and the start date plus
+`max_range_days - 1` days. Invalid defaults and option metadata values raise an
+error, and reducing the limit removes date ranges that exceed it. This limit
+does not restrict single months or month ranges; `min_value` and `max_value`
+still apply. It is available only in calendar modes.
+
+| Setting | What it limits | Example |
+| --- | --- | --- |
+| `min_value` / `max_value` | Earliest/latest date or month that can be selected | `"2026-01-01"` through `"2027-12-31"` |
+| `max_range_days` | Inclusive duration of each date range | `31` permits January 1 through January 31 |
+| `max_selections` | Number of items in the list | `8` permits eight items, each a single value or a whole range |
+
+Use a `datetime.date` object or an ISO string for bounds. `datetime.datetime`
+objects are not accepted. Calendar defaults remain strings, such as
+`"2026-10"` and `"2026-10-01/2026-10-31"`.
+
+### Shared Settings
+
+Existing ordering, numbering, colors, selection limits, disabled states,
+`selected_position`, `default_revision`, and inline single selection apply to
+calendar items. `options` is optional and can supply metadata for known calendar
+values; it does not restrict which valid values the picker accepts. API
+suggestions are available only in options mode. Search placeholders and dropdown
+height do not affect calendar inputs; `max_selections_placeholder` appears as a
+status message when the limit is reached.
+
+### Browser Support
+
+Date and month inputs use the browser's native picker, whose presentation and
+language depend on the browser and operating system. Browsers without a native
+month picker can accept `YYYY-MM` as text; the same validation applies. Calendar
+values are strings without timezone conversion. See
+[`examples/calendar_input.py`](examples/calendar_input.py) for mixed, date-only,
+month-only, and form examples, including Japanese messages.
+
 ## API Suggestions
 
 Set `suggestions_api_url` to request suggestions as the user types. Static `options` that match the query are shown first, followed by API results. Duplicate `value` entries prefer the static option.
@@ -299,6 +487,9 @@ Changing the input cancels the previous in-flight request. Set `options=[]` to
 use only API results. Selected API values remain selected when a later query
 returns different suggestions.
 
+## Examples
+
+See [`examples/README.md`](examples/README.md) for a description of each example.
 Build the frontend before packaging or using release mode:
 
 ```bash
@@ -310,6 +501,7 @@ Run the example app:
 
 ```bash
 streamlit run examples/basic.py
+streamlit run examples/calendar_input.py
 streamlit run examples/color_by_id.py
 streamlit run examples/tooltip_labels.py
 streamlit run examples/api_suggestions.py
@@ -335,6 +527,28 @@ The embedded API binds to `127.0.0.1`. Because suggestions are fetched by the
 browser, it works only when the browser and Streamlit run on the same machine.
 For Docker, another computer, or a hosted Streamlit app, configure
 `suggestions_api_url` with a browser-accessible HTTPS endpoint instead.
+
+## Troubleshooting
+
+If a new argument such as `calendar_labels` or `max_range_days` raises
+`TypeError: sortable_multiselect() got an unexpected keyword argument ...`,
+check the package path and function signature in the Python environment used
+to run Streamlit:
+
+```bash
+python -c 'import inspect; import streamlit_sortable_multiselect as sms; print(sms.__file__); print(inspect.signature(sms.sortable_multiselect))'
+```
+
+For repository development, install the local package in that environment with
+`python -m pip install -e ".[dev]"`. If the signature includes the argument but
+an existing Streamlit process still reports it as unexpected, stop that process
+and restart it to load the updated Python module:
+
+```bash
+python -m streamlit run examples/calendar_input.py
+```
+
+After rebuilding frontend assets, reload the app page to pick up the updated UI.
 
 ## Release
 
