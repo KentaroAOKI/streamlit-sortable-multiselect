@@ -168,6 +168,54 @@ describe("SortableMultiselect", () => {
     expect(screen.getByLabelText("End")).toHaveAttribute("type", mode);
   });
 
+  it("updates iframe height when picker-local validation appears and clears", () => {
+    renderComponent({ input_mode: "date", options: [], default_selected: [] });
+    vi.mocked(Streamlit.setFrameHeight).mockClear();
+    vi.mocked(Streamlit.setComponentValue).mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Complete the selection");
+    expect(Streamlit.setFrameHeight).toHaveBeenCalled();
+    expect(Streamlit.setComponentValue).not.toHaveBeenCalled();
+
+    vi.mocked(Streamlit.setFrameHeight).mockClear();
+    fireEvent.change(screen.getByLabelText("Date"), { target: { value: "2028-02-29" } });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(Streamlit.setFrameHeight).toHaveBeenCalled();
+    expect(Streamlit.setComponentValue).not.toHaveBeenCalled();
+  });
+
+  it.each(["date", "month", "date_month"])(
+    "updates iframe height when the %s picker switches layout", (mode) => {
+      renderComponent({ input_mode: mode, options: [], default_selected: [] });
+      vi.mocked(Streamlit.setFrameHeight).mockClear();
+      vi.mocked(Streamlit.setComponentValue).mockClear();
+
+      fireEvent.click(screen.getByRole("radio", {
+        name: mode === "date_month" ? "Month (single)" : "Range",
+      }));
+      if (mode === "date_month") {
+        expect(screen.queryByLabelText("End")).not.toBeInTheDocument();
+      } else {
+        expect(screen.getByLabelText("End")).toBeInTheDocument();
+      }
+      expect(Streamlit.setFrameHeight).toHaveBeenCalled();
+      expect(Streamlit.setComponentValue).not.toHaveBeenCalled();
+
+      vi.mocked(Streamlit.setFrameHeight).mockClear();
+      fireEvent.click(screen.getByRole("radio", {
+        name: mode === "date_month" ? "Date (range)" : "Single",
+      }));
+      if (mode === "date_month") {
+        expect(screen.getByLabelText("End")).toBeInTheDocument();
+      } else {
+        expect(screen.queryByLabelText("End")).not.toBeInTheDocument();
+      }
+      expect(Streamlit.setFrameHeight).toHaveBeenCalled();
+      expect(Streamlit.setComponentValue).not.toHaveBeenCalled();
+    },
+  );
+
   it("validates date bounds, reversed ranges, and duplicate items", () => {
     renderComponent({ input_mode: "date", options: [], default_selected: ["2028-02-29"],
       min_value: "2028-02-01", max_value: "2028-03-31" });

@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from "react";
+import { Streamlit } from "streamlit-component-lib";
 import { CalendarMode, dateRangeDays, rangeEndMaximum, validCalendarValue } from "./calendar";
 
 const DEFAULT_LABELS = {
@@ -67,6 +68,11 @@ export function CalendarPicker({ mode, minimum, maximum, disabled, selected, onA
     setEnd("");
     setSubmitted(false);
   }, [mode, actualPrecision]);
+
+  // Picker-local state can change the layout without rerendering the parent.
+  useEffect(() => {
+    Streamlit.setFrameHeight();
+  });
 
   function add() {
     if (disabled) return;
