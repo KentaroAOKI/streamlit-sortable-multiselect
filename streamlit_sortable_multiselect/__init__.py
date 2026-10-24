@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import os
+import re
+from calendar import monthrange
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence, Union, cast
 from urllib.parse import urlparse
 
 import streamlit.components.v1 as components
 
-__version__ = "0.7.9"
+__version__ = "0.7.10"
 __all__ = ["COLOR_FIELDS", "COLOR_SOURCES", "ColorValue", "sortable_multiselect"]
 
 _COMPONENT_NAME = "streamlit_sortable_multiselect"
@@ -285,9 +288,79 @@ def _normalize_suggestions_headers(
     return result
 
 
+def _validate_calendar_labels(labels: Mapping[str, str] | None) -> dict[str, str]:
+    if labels is None:
+        return {}
+    if not isinstance(labels, Mapping):
+        raise TypeError("calendar_labels must be a mapping of label names to strings.")
+    supported = {
+        "date_range", "month_single", "single", "range", "add", "start", "end",
+        "date", "month", "calendar_input", "selection_kind", "invalid_value",
+        "duplicate_value", "incomplete_selection", "range_too_long",
+    }
+    result: dict[str, str] = {}
+    for name, label in labels.items():
+        if name not in supported:
+            raise ValueError(f"Unknown calendar_labels key: {name!r}.")
+        if not isinstance(label, str):
+            raise TypeError("calendar_labels values must be strings.")
+        if not label.strip():
+            raise ValueError("calendar_labels values must not be empty.")
+        result[name] = label
+    return result
+
+
+def _calendar_bound(name: str, value: str | date | None, *, upper: bool) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        raise TypeError(f"{name} must be a date or ISO date/month string, not datetime.")
+    if isinstance(value, date):
+        return value.isoformat()
+    if not isinstance(value, str):
+        raise TypeError(f"{name} must be a date or ISO date/month string.")
+    if re.fullmatch(r"[0-9]{4}-[0-9]{2}", value):
+        year, month = map(int, value.split("-"))
+        try:
+            day = monthrange(year, month)[1] if upper else 1
+            return date(year, month, day).isoformat()
+        except ValueError:
+            pass
+    elif re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value):
+        try:
+            return date.fromisoformat(value).isoformat()
+        except ValueError:
+            pass
+    raise ValueError(f"{name} must be a valid YYYY-MM-DD or YYYY-MM value.")
+
+
+def _validate_calendar_value(
+    value: str, input_mode: str, minimum: str | None, maximum: str | None,
+    max_range_days: int | None = None,
+) -> None:
+    parts = value.split("/")
+    if len(parts) not in (1, 2) or any(len(part) != len(parts[0]) for part in parts):
+        raise ValueError(f"Invalid calendar value: {value!r}.")
+    precision = "month" if len(parts[0]) == 7 else "date"
+    if input_mode != "date_month" and precision != input_mode:
+        raise ValueError(f"Calendar value {value!r} does not match input_mode={input_mode!r}.")
+    for part in parts:
+        _calendar_bound("calendar value", part, upper=False)
+        lower = minimum[:7] if minimum and precision == "month" else minimum
+        upper = maximum[:7] if maximum and precision == "month" else maximum
+        if (lower and part < lower) or (upper and part > upper):
+            raise ValueError(f"Calendar value {value!r} is outside min_value/max_value.")
+    if len(parts) == 2 and parts[0] > parts[1]:
+        raise ValueError(f"Calendar range {value!r} must start on or before its end.")
+    if len(parts) == 2 and precision == "date" and max_range_days is not None:
+        days = (date.fromisoformat(parts[1]) - date.fromisoformat(parts[0])).days + 1
+        if days > max_range_days:
+            raise ValueError(f"Calendar range {value!r} exceeds max_range_days={max_range_days}.")
+
+
 def sortable_multiselect(
     label: str,
-    options: Sequence[str | Mapping[str, Any]],
+    options: Sequence[str | Mapping[str, Any]] = (),
     default: Sequence[str] | None = None,
     placeholder: str = "Select...",
     disabled: bool = False,
@@ -321,6 +394,11 @@ def sortable_multiselect(
     suggestions_color_path: str | None = None,
     key: str | None = None,
     default_revision: str | int | None = None,
+    input_mode: str = "options",
+    min_value: str | date | None = None,
+    max_value: str | date | None = None,
+    calendar_labels: Mapping[str, str] | None = None,
+    max_range_days: int | None = None,
 ) -> list[str]:
     """Select multiple string values and return them in user-defined order.
 
@@ -404,6 +482,21 @@ def sortable_multiselect(
         Optional Streamlit component key.
     default_revision:
         Change this value to reapply default even when its values and order are unchanged.
+    input_mode:
+        "options" for searchable options, "date" or "month" for calendar inputs,
+        or "date_month" for one switch between date ranges and single months.
+        Date-only and month-only pickers offer a separate Single/Range switch.
+    min_value, max_value:
+        Inclusive calendar bounds as date objects, YYYY-MM-DD, or YYYY-MM strings.
+        Month bounds expand to the first/last day. Month selections compare by month.
+        Only available in calendar modes.
+    calendar_labels:
+        Calendar switch, button, field, and validation-message overrides.
+        Omitted entries use English defaults. Values must be nonempty strings.
+        "range_too_long" supports the placeholder "{max_range_days}".
+    max_range_days:
+        Maximum length of each date range, including both endpoints. A positive
+        integer, or None for no limit. Does not limit month values or month ranges.
     """
     if not isinstance(label, str):
         raise TypeError("label must be a string.")
@@ -431,6 +524,26 @@ def sortable_multiselect(
         isinstance(default_revision, bool) or not isinstance(default_revision, (str, int))
     ):
         raise TypeError("default_revision must be a string, an integer, or None.")
+    if not isinstance(input_mode, str):
+        raise TypeError("input_mode must be a string.")
+    if input_mode not in {"options", "date", "month", "date_month"}:
+        raise ValueError('input_mode must be "options", "date", "month", or "date_month".')
+    calendar_mode = input_mode != "options"
+    calendar_label_values = _validate_calendar_labels(calendar_labels)
+    if max_range_days is not None:
+        _validate_non_negative_int("max_range_days", max_range_days)
+        if max_range_days == 0:
+            raise ValueError("max_range_days must be 1 or greater.")
+        if not calendar_mode:
+            raise ValueError("max_range_days requires a calendar input_mode.")
+    if not calendar_mode and (min_value is not None or max_value is not None):
+        raise ValueError("min_value and max_value require a calendar input_mode.")
+    minimum = _calendar_bound("min_value", min_value, upper=False)
+    maximum = _calendar_bound("max_value", max_value, upper=True)
+    if minimum and maximum and minimum > maximum:
+        raise ValueError("min_value must be on or before max_value.")
+    if calendar_mode and suggestions_api_url is not None:
+        raise ValueError("suggestions_api_url is only supported in options mode.")
 
     base_color_value = None if base_color is None else _require_color("base_color", base_color)
     tooltip_color_value = (
@@ -439,6 +552,9 @@ def sortable_multiselect(
     option_items = _normalize_options(options)
     option_values = [option["value"] for option in option_items]
     default_values = _validate_string_sequence("default", default)
+    if calendar_mode:
+        for value in [*option_values, *default_values]:
+            _validate_calendar_value(value, input_mode, minimum, maximum, max_range_days)
     order_color_values = _validate_order_colors(order_colors)
     value_color_values = _validate_value_colors(value_colors)
     color_palette_values = _validate_color_palette(color_palette)
@@ -491,7 +607,7 @@ def sortable_multiselect(
         raise ValueError("options must not contain duplicate values.")
 
     missing_defaults = [value for value in default_values if value not in seen_option_values]
-    if missing_defaults:
+    if missing_defaults and not calendar_mode:
         missing = ", ".join(repr(value) for value in missing_defaults)
         raise ValueError(f"default contains values not present in options: {missing}.")
 
@@ -543,6 +659,11 @@ def sortable_multiselect(
         suggestions_loading_message=suggestions_loading_message,
         suggestions_error_message=suggestions_error_message,
         default_revision=default_revision,
+        input_mode=input_mode,
+        min_value=minimum,
+        max_value=maximum,
+        calendar_labels=calendar_label_values,
+        max_range_days=max_range_days,
         key=key,
         default=default_values,
     )

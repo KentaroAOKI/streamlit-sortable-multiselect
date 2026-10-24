@@ -42,6 +42,36 @@ Run it with:
 streamlit run examples/basic.py
 ```
 
+## Calendar Example
+
+File: [`calendar_input.py`](calendar_input.py)
+
+This app demonstrates mixed date/month input, date-only input, month-only input,
+and a calendar component inside `st.form`. Mixed mode has one switch between
+Date (range), with Start and End inputs, and Month (single), with one month input.
+Use Add to append one sortable item. Switching preserves the selected list.
+Date-only and month-only modes have a separate Single/Range switch.
+The first two examples use `calendar_labels` to display Japanese switches, Add
+buttons, input labels, and validation messages; other examples retain the default
+English text. The range-length message inserts `max_range_days` through the
+`{max_range_days}` placeholder. The mixed example also customizes `empty_message`
+and `max_selections_placeholder` in Japanese.
+
+The examples include inclusive bounds, initial mixed selections, numbering,
+colors, selection limits, and selected items above the picker. Returned values
+use `YYYY-MM-DD` or `YYYY-MM`, with `/` between range endpoints.
+The mixed picker limits each date range to 31 days with `max_range_days=31`;
+both endpoints count toward this limit.
+
+Run it with:
+
+```bash
+streamlit run examples/calendar_input.py
+```
+
+The picker uses browser-native controls. Their appearance and localization vary
+by browser; month entry falls back to text where native month picking is unavailable.
+
 ## Color by ID Example
 
 File: [`color_by_id.py`](color_by_id.py)

@@ -63,6 +63,208 @@ describe("SortableMultiselect", () => {
     vi.unstubAllGlobals();
   });
 
+  it("uses one switch for date ranges and single months in a sortable list", () => {
+    renderComponent({ input_mode: "date_month", options: [], default_selected: [] });
+    expect(screen.getAllByRole("group")).toHaveLength(1);
+    expect(screen.getAllByRole("radio")).toHaveLength(2);
+    expect(screen.getByRole("radio", { name: "Date (range)" })).toBeChecked();
+    expect(screen.queryByRole("radio", { name: "Single" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Start"), { target: { value: "2028-02-28" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Complete the selection");
+    expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith([]);
+    fireEvent.change(screen.getByLabelText("End"), { target: { value: "2028-02-29" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["2028-02-28/2028-02-29"]);
+    fireEvent.click(screen.getByRole("radio", { name: "Month (single)" }));
+    expect(screen.queryByLabelText("End")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Month"), { target: { value: "2028-03" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    fireEvent.change(screen.getByLabelText("Month"), { target: { value: "2028-04" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Date (range)" }));
+    expect(screen.getByLabelText("Start")).toHaveValue("");
+    expect(screen.getByLabelText("End")).toHaveValue("");
+    fireEvent.change(screen.getByLabelText("Start"), { target: { value: "2028-04-01" } });
+    fireEvent.change(screen.getByLabelText("End"), { target: { value: "2028-04-30" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith([
+      "2028-02-28/2028-02-29", "2028-03", "2028-04-01/2028-04-30",
+    ]);
+    fireEvent.click(screen.getByLabelText("Move 2028-04-01 – 2028-04-30 up"));
+    expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith([
+      "2028-02-28/2028-02-29", "2028-04-01/2028-04-30", "2028-03",
+    ]);
+    fireEvent.click(screen.getByLabelText("Remove 2028-02-28 – 2028-02-29"));
+    expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["2028-04-01/2028-04-30", "2028-03"]);
+  });
+
+  it("localizes the combined switch and preserves input when labels change", () => {
+    const args = { input_mode: "date_month", options: [], default_selected: [],
+      calendar_labels: { date_range: "日付（範囲）" } };
+    const { rerender } = renderComponent(args);
+    expect(screen.getByRole("radio", { name: "日付（範囲）" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Month (single)" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Start"), { target: { value: "2028-02-01" } });
+    rerender(componentWithArgs({ ...args,
+      calendar_labels: { date_range: "日付（範囲）", month_single: "年月（単一）" },
+    }));
+    expect(screen.getByLabelText("Start")).toHaveValue("2028-02-01");
+    fireEvent.click(screen.getByRole("radio", { name: "年月（単一）" }));
+    fireEvent.change(screen.getByLabelText("Month"), { target: { value: "2028-02" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["2028-02"]);
+  });
+
+  it("localizes buttons, fields, validation messages, and range-limit placeholders", () => {
+    renderComponent({ input_mode: "date_month", options: [], default_selected: [],
+      max_range_days: 3, max_selections: 2,
+      empty_message: "未選択です。", max_selections_placeholder: "上限です。",
+      calendar_labels: {
+        date_range: "日付（範囲）", month_single: "年月（単一）",
+        add: "追加", start: "開始日", end: "終了日", month: "年月",
+        calendar_input: "入力方法", incomplete_selection: "入力してください。",
+        invalid_value: "範囲を確認してください。", duplicate_value: "選択済みです。",
+        range_too_long: "{max_range_days}日以内（最大{max_range_days}日）で指定してください。",
+      },
+    });
+    expect(screen.getByRole("group", { name: "入力方法" })).toBeInTheDocument();
+    expect(screen.getByText("未選択です。")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "追加" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("入力してください。");
+    fireEvent.change(screen.getByLabelText("開始日"), { target: { value: "2028-02-28" } });
+    fireEvent.change(screen.getByLabelText("終了日"), { target: { value: "2028-03-02" } });
+    expect(screen.getByRole("alert")).toHaveTextContent("3日以内（最大3日）で指定してください。");
+    expect(screen.getByRole("button", { name: "追加" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("終了日"), { target: { value: "2028-02-27" } });
+    expect(screen.getByRole("alert")).toHaveTextContent("範囲を確認してください。");
+    fireEvent.change(screen.getByLabelText("終了日"), { target: { value: "2028-03-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "追加" }));
+    expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["2028-02-28/2028-03-01"]);
+    fireEvent.change(screen.getByLabelText("開始日"), { target: { value: "2028-02-28" } });
+    fireEvent.change(screen.getByLabelText("終了日"), { target: { value: "2028-03-01" } });
+    expect(screen.getByRole("alert")).toHaveTextContent("選択済みです。");
+    fireEvent.click(screen.getByRole("radio", { name: "年月（単一）" }));
+    fireEvent.change(screen.getByLabelText("年月"), { target: { value: "2028-12" } });
+    fireEvent.click(screen.getByRole("button", { name: "追加" }));
+    expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["2028-02-28/2028-03-01", "2028-12"]);
+    expect(screen.getByText("上限です。")).toHaveAttribute("role", "status");
+  });
+
+  it.each(["date", "month"])("localizes single-value input labels in %s mode", (mode) => {
+    renderComponent({ input_mode: mode, options: [], default_selected: [],
+      calendar_labels: { date: "日付", month: "年月", selection_kind: "選択方法" },
+    });
+    expect(screen.getByRole("group", { name: "選択方法" })).toBeInTheDocument();
+    expect(screen.getByLabelText(mode === "date" ? "日付" : "年月")).toHaveAttribute("type", mode);
+  });
+
+  it.each(["date", "month"])("localizes the Single/Range switch in %s mode", (mode) => {
+    renderComponent({ input_mode: mode, options: [], default_selected: [],
+      calendar_labels: { single: "単一", range: "範囲" },
+    });
+    expect(screen.getByRole("radio", { name: "単一" })).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: "範囲" }));
+    expect(screen.getByLabelText("Start")).toHaveAttribute("type", mode);
+    expect(screen.getByLabelText("End")).toHaveAttribute("type", mode);
+  });
+
+  it("validates date bounds, reversed ranges, and duplicate items", () => {
+    renderComponent({ input_mode: "date", options: [], default_selected: ["2028-02-29"],
+      min_value: "2028-02-01", max_value: "2028-03-31" });
+    const input = screen.getByLabelText("Date");
+    expect(input).toHaveAttribute("min", "2028-02-01");
+    expect(input).toHaveAttribute("max", "2028-03-31");
+    fireEvent.change(input, { target: { value: "2028-01-31" } });
+    expect(screen.getByRole("alert")).toHaveTextContent("allowed range");
+    expect(screen.getByRole("button", { name: "Add" })).toBeDisabled();
+    fireEvent.change(input, { target: { value: "2028-02-29" } });
+    expect(screen.getByRole("alert")).toHaveTextContent("already selected");
+    fireEvent.click(screen.getByRole("radio", { name: "Range" }));
+    fireEvent.change(screen.getByLabelText("Start"), { target: { value: "2028-03-10" } });
+    fireEvent.change(screen.getByLabelText("End"), { target: { value: "2028-03-01" } });
+    expect(screen.getByRole("alert")).toHaveTextContent("start on or before end");
+    fireEvent.change(screen.getByLabelText("End"), { target: { value: "2028-03-31" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith([
+      "2028-02-29", "2028-03-10/2028-03-31",
+    ]);
+  });
+
+  it("limits inclusive date range length and keeps month selection available", () => {
+    renderComponent({ input_mode: "date_month", options: [], default_selected: [], max_range_days: 3 });
+    fireEvent.change(screen.getByLabelText("Start"), { target: { value: "2028-02-28" } });
+    expect(screen.getByLabelText("End")).toHaveAttribute("max", "2028-03-01");
+    fireEvent.change(screen.getByLabelText("End"), { target: { value: "2028-03-02" } });
+    expect(screen.getByRole("alert")).toHaveTextContent("at most 3 days");
+    expect(screen.getByRole("button", { name: "Add" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("End"), { target: { value: "2028-03-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["2028-02-28/2028-03-01"]);
+    fireEvent.click(screen.getByRole("radio", { name: "Month (single)" }));
+    fireEvent.change(screen.getByLabelText("Month"), { target: { value: "2028-12" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["2028-02-28/2028-03-01", "2028-12"]);
+  });
+
+  it("revalidates selections and the end picker when the range limit changes", () => {
+    const args = { input_mode: "date_month", options: [], default_selected: [], max_range_days: 3,
+      max_value: "2028-03-31" };
+    const { rerender } = renderComponent(args);
+    fireEvent.change(screen.getByLabelText("Start"), { target: { value: "2028-03-30" } });
+    expect(screen.getByLabelText("End")).toHaveAttribute("max", "2028-03-31");
+    fireEvent.change(screen.getByLabelText("End"), { target: { value: "2028-03-31" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["2028-03-30/2028-03-31"]);
+    rerender(componentWithArgs({ ...args, max_range_days: 1 }));
+    expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith([]);
+    fireEvent.change(screen.getByLabelText("Start"), { target: { value: "2028-03-30" } });
+    expect(screen.getByLabelText("End")).toHaveAttribute("max", "2028-03-30");
+  });
+
+  it("applies month bounds, selection limits, and disabled controls", () => {
+    const { rerender } = renderComponent({ input_mode: "month", options: [], default_selected: [],
+      min_value: "2028-01-15", max_value: "2028-03-10", max_selections: 1 });
+    const input = screen.getByLabelText("Month");
+    expect(input).toHaveAttribute("min", "2028-01");
+    expect(input).toHaveAttribute("max", "2028-03");
+    fireEvent.change(input, { target: { value: "2028-01" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["2028-01"]);
+    expect(input).toBeDisabled();
+    expect(screen.getByText("Selection limit reached")).toHaveAttribute("role", "status");
+    fireEvent.click(screen.getByLabelText("Remove 2028-01"));
+    expect(input).not.toBeDisabled();
+    rerender(componentWithArgs({ input_mode: "month", options: [], default_selected: [], disabled: true }));
+    expect(input).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Add" })).toBeDisabled();
+  });
+
+  it("keeps calendar values across reruns and reapplies defaults on revision changes", () => {
+    const args = { input_mode: "date_month", options: [], default_selected: ["2028-01"], default_revision: 0 };
+    const { rerender } = renderComponent(args);
+    fireEvent.change(screen.getByLabelText("Start"), { target: { value: "2028-02-29" } });
+    fireEvent.change(screen.getByLabelText("End"), { target: { value: "2028-03-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    rerender(componentWithArgs({ ...args, default_selected: ["2028-01"], options: [] }));
+    expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["2028-01", "2028-02-29/2028-03-01"]);
+    rerender(componentWithArgs({ ...args, default_revision: 1 }));
+    expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["2028-01"]);
+    rerender(componentWithArgs({ ...args, default_revision: 1, min_value: "2028-02-01" }));
+    expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith([]);
+  });
+
+  it("replaces inline calendar selections and supports clearing them", () => {
+    renderComponent({ input_mode: "date_month", options: [], default_selected: ["2028-01"],
+      single_select_display: true, max_selections: 1 });
+    expect(screen.queryByRole("list", { name: "Selected items" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Start"), { target: { value: "2028-02-29" } });
+    fireEvent.change(screen.getByLabelText("End"), { target: { value: "2028-03-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith(["2028-02-29/2028-03-01"]);
+    fireEvent.click(screen.getByLabelText("Remove 2028-02-29 – 2028-03-01"));
+    expect(Streamlit.setComponentValue).toHaveBeenLastCalledWith([]);
+  });
+
   it("renders default selection and adds an item", async () => {
     renderComponent();
 
